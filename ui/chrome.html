@@ -267,8 +267,10 @@ function applyChrome(){const glass=!!S.glass_on&&!!S.glass_ok,lay=SLOTS[S.layout
   b.toggle('collapsed',!!S.collapsed);['classic','compact','vertical'].forEach(l=>b.toggle('lay-'+l,l===lay));place(lay);
   $('#sidetog').title=S.collapsed?'Expand sidebar':'Collapse sidebar'};
  if(!first&&document.startViewTransition&&!RM.matches)document.startViewTransition(go);else go()}
+const FONT_IDS=['inter','rounded','system','serif','mono'];
+function applyFont(f){const b=document.body.classList;FONT_IDS.forEach(k=>b.toggle('f-'+k,k===(f||'inter')))}
 function render(){
-  applyChrome();
+  applyChrome();applyFont(S.font);
   const r=document.documentElement.style;
   r.setProperty('--accent',S.accent);r.setProperty('--accent-fg',lum(S.accent)>.42?'#111':'#fff');
   r.setProperty('--sa',(.6+S.glass*.3).toFixed(2));

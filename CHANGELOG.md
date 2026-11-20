@@ -6,6 +6,16 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2-beta.2] - 2026-11-20
+
+### Added
+- Font setting in Settings → Appearance and as a step in the first-run setup: Inter (new default),
+  Nunito, Segoe UI, Serif and Mono, applied instantly. Inter and Nunito are bundled (SIL OFL).
+
+### Fixed
+- Menus and dialogs over a page no longer show faint squares at their rounded corners (their drop shadow
+  was being cut off square).
+
 ## [0.2.2-beta.1] - 2026-11-20
 
 ### Fixed

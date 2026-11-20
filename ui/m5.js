@@ -18,6 +18,8 @@ function syncHoles(){if(holeRaf)return;holeRaf=requestAnimationFrame(()=>{holeRa
  HOLES.forEach(([sel,inner])=>{const e=$(sel);if(!e||!e.classList.contains('open'))return;add(inner?e.querySelector('.box'):e)});
  document.querySelectorAll('#toasts .toast').forEach(add);
  const sig=JSON.stringify(rects);if(sig!==holeSig){holeSig=sig;send({t:'holes',rects})}})}
+// Clicks that land on the chrome's bare background (e.g. a popup's shadow over the page) count as page clicks.
+document.addEventListener('mousedown',e=>{if(e.target===document.body&&holeSig&&holeSig!=='[]')event({type:'pageclick'})});
 function watchHoles(){const mo=new MutationObserver(syncHoles),ro=new ResizeObserver(syncHoles);
  HOLES.forEach(([sel])=>{const e=$(sel);if(!e)return;mo.observe(e,{attributes:true,attributeFilter:['class','style']});ro.observe(e);const b=e.querySelector('.box');if(b)ro.observe(b)});
  mo.observe($('#toasts'),{childList:true});addEventListener('resize',syncHoles)}
@@ -185,7 +187,11 @@ const layCards=()=>LAYS.map(([k,n,d])=>`<button class="pv ${layNow()===k?'on':''
 const glassCards=()=>`<button class="pv ${glassNow()?'on':''}" data-glass="1" ${glassOk()?'':'disabled'} aria-pressed="${glassNow()}">${mini('glass','glassy')}<b>${ico('check')}Glass</b><small>Frosted, see-through surfaces with soft depth</small></button>
  <button class="pv ${glassNow()?'':'on'}" data-glass="0" aria-pressed="${!glassNow()}">${mini('glass','flatty')}<b>${ico('check')}Flat</b><small>Solid surfaces, no blur or transparency</small></button>`;
 const glassNote=()=>glassOk()?'':`<div class="note">${ico('info')}<span>This version of Windows (or its “Transparency effects” setting) doesn’t support window blur, so Wisp uses Flat. Glass turns on by itself when it becomes available.</span></div>`;
+const FONTS=[['inter','Inter','Clean and friendly, like Apple’s system font','"Wisp Inter"'],['rounded','Nunito','Soft and rounded','"Wisp Nunito"'],['system','Segoe UI','The Windows system font','"Segoe UI Variable Text","Segoe UI"'],['serif','Serif','Classic and bookish','Charter,Cambria,Georgia,serif'],['mono','Mono','Monospaced, for a technical look','"Cascadia Code",Consolas,monospace']];
+const fontNow=()=>(S&&S.font)||'inter';
+const fontCards=()=>FONTS.map(([k,n,d,st])=>`<button class="pv fnt ${fontNow()===k?'on':''}" data-font="${k}" aria-pressed="${fontNow()===k}"><div class="mini fs" style="font-family:${st.replace(/"/g,'&quot;')}"><span>Aa</span><em>The quick brown fox</em></div><b>${ico('check')}${n}</b><small>${d}</small></button>`).join('');
 function wireLook(root){
+ root.querySelectorAll('[data-font]').forEach(x=>x.onclick=()=>{if(fontNow()!==x.dataset.font)act('set',{k:'font',v:x.dataset.font})});
  root.querySelectorAll('[data-lay]').forEach(x=>x.onclick=()=>{if(layNow()!==x.dataset.lay)act('set',{k:'layout',v:x.dataset.lay})});
  root.querySelectorAll('[data-glass]').forEach(x=>x.onclick=()=>act('set',{k:'glass_on',v:x.dataset.glass==='1'}));
  root.querySelectorAll('[data-theme]').forEach(x=>x.onclick=()=>{if(!!S.light!==(x.dataset.theme==='1'))act('theme')})}
@@ -197,9 +203,10 @@ function renderSetup(){if(!su.open)return;const b=$('#setupbox');let h='';
  if(su.step===0)h=`<div class="su-h"><img src="/logo.svg" alt=""><h2>Welcome to Wisp</h2><p>Let’s set up how Wisp looks. You can change any of this later in Settings → Appearance.</p></div><div class="su-seg"><div class="seg">${themeSeg()}</div></div>`;
  if(su.step===1)h=`<div class="su-h"><h2>Choose a layout</h2><p>Every layout has the same features, just arranged differently.</p></div><div class="pvs">${layCards()}</div>`;
  if(su.step===2)h=`<div class="su-h"><h2>Glass effects</h2><p>Frosted, see-through surfaces, or solid and flat. Everything else stays the same.</p></div><div class="pvs">${glassCards()}</div>${glassNote()}`;
+ if(su.step===3)h=`<div class="su-h"><h2>Pick a font</h2><p>Used across Wisp’s menus, tabs and pages.</p></div><div class="pvs">${fontCards()}</div>`;
  const anim=su.shown!==su.step;su.shown=su.step;
- b.innerHTML=`<div class="${anim?'su-body':''}">${h}</div><div class="su-f"><div class="su-dots">${[0,1,2].map(i=>`<i class="${i===su.step?'on':''}"></i>`).join('')}</div>${su.step?'<button class="pbtn" id="suback">Back</button>':''}<button class="pbtn go" id="sunext">${su.step<2?'Continue':'Start browsing'}</button></div>`;
- wireLook(b);$('#sunext').onclick=()=>{if(su.step<2){su.step++;renderSetup()}else finishSetup()};const bk=$('#suback');if(bk)bk.onclick=()=>{su.step--;renderSetup()};
+ b.innerHTML=`<div class="${anim?'su-body':''}">${h}</div><div class="su-f"><div class="su-dots">${[0,1,2,3].map(i=>`<i class="${i===su.step?'on':''}"></i>`).join('')}</div>${su.step?'<button class="pbtn" id="suback">Back</button>':''}<button class="pbtn go" id="sunext">${su.step<3?'Continue':'Start browsing'}</button></div>`;
+ wireLook(b);$('#sunext').onclick=()=>{if(su.step<3){su.step++;renderSetup()}else finishSetup()};const bk=$('#suback');if(bk)bk.onclick=()=>{su.step--;renderSetup()};
  if(anim)$('#sunext').focus()}
 const tg=(on,k)=>`<button class="sw2 ${on?'on':''}" data-set="${k}" role="switch"><i></i></button>`;
 const row=(t,sub,ctl)=>`<div class="srow"><span>${t}${sub?`<small>${sub}</small>`:''}</span>${ctl||''}</div>`;
@@ -208,11 +215,12 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
  let h='';
  if(setSec==='general')h=`<h2>General</h2>${row('Default search engine','Used by the address bar. Type a prefix like “d cats” to use another engine once.',`<div class="seg">${S.engines.map(e=>`<button data-eng="${e.id}" class="${S.engine===e.id?'on':''}">${esc(e.name)}</button>`).join('')}</div>`)}
   ${row('Search suggestions','Sends what you type in the address bar to your search engine to get suggestions.',tg(s.suggest,'suggest'))}
-  ${row('Appearance','Theme, layout and glass effects.',`<button class="pbtn" data-sec="appearance">Open</button>`)}`;
+  ${row('Appearance','Theme, layout, glass effects and font.',`<button class="pbtn" data-sec="appearance">Open</button>`)}`;
  if(setSec==='appearance')h=`<h2>Appearance</h2>
   <h5>Theme</h5><div class="seg" style="display:inline-flex">${themeSeg()}</div>
   <h5>Layout</h5><div class="pvs">${layCards()}</div>
   <h5>Glass effects</h5><div class="pvs">${glassCards()}</div>${glassNote()}
+  <h5>Font</h5><div class="pvs">${fontCards()}</div>
   <h5>Wallpaper</h5>${row('Wallpaper, accent colour and widgets','Set these in Customize on the New Tab page. They are saved per space.',`<button class="pbtn" data-act="newtab">Open a New Tab</button>`)}`;
  if(setSec==='privacy')h=`<h2>Privacy & security</h2>
   ${row('Ad & tracker blocker','Blocks ad and tracking requests using filter lists, and hides common ad boxes.',tg(s.blocker,'blocker'))}

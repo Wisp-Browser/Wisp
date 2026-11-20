@@ -74,6 +74,8 @@ pub struct Settings {
     pub side_collapsed: bool,
     /// The first-run setup still has to be shown.
     pub setup: bool,
+    /// Interface font: "inter" | "rounded" | "system" | "serif" | "mono".
+    pub font: String,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -98,6 +100,7 @@ impl Default for Settings {
             glass_on: true,
             side_collapsed: false,
             setup: false,
+            font: "inter".into(),
         }
     }
 }

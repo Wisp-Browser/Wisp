@@ -48,6 +48,8 @@ const M5_JS: &str = include_str!("../ui/m5.js");
 const M5_CSS: &str = include_str!("../ui/m5.css");
 const THEME_CSS: &str = include_str!("../ui/theme.css");
 const ICONS_JS: &str = include_str!("../ui/icons.js");
+const FONT_INTER: &[u8] = include_bytes!("../ui/fonts/inter.woff2");
+const FONT_NUNITO: &[u8] = include_bytes!("../ui/fonts/nunito.woff2");
 
 /// Origin served by our custom `wisp` protocol (WebView2 maps it to http://wisp.localhost).
 const BASE: &str = "http://wisp.localhost";
@@ -409,6 +411,9 @@ fn set_backdrop(_window: &Window, _on: bool, _dark: bool) -> bool {
     false
 }
 
+/// How far (logical px: sides, top, bottom) a popup's drop shadow reaches past its edges.
+#[cfg(windows)]
+const HOLE_SHADOW: (f64, f64, f64) = (44.0, 28.0, 64.0);
 /// Corner radius (logical px) of the page views; the chrome draws it (`wisp.cuts` in ui/chrome.html).
 const PAGE_RADIUS: f64 = 12.0;
 
@@ -456,8 +461,18 @@ fn shape_chrome(chrome: &WebView, w: f64, h: f64, scale: f64, cuts: &[R], round:
                 }
             }
         }
+        // Menus and dialogs, plus room for their soft drop shadow (`--shadow` in ui/theme.css), so
+        // the shadow isn't cut off square at the rounded corners.
         for (ho, _) in holes {
-            add(rgn, px(ho.x) - 1, px(ho.y) - 1, px(ho.x + ho.w) + 1, px(ho.y + ho.h) + 1, RGN_OR);
+            let (sx, st, sb) = (px(HOLE_SHADOW.0), px(HOLE_SHADOW.1), px(HOLE_SHADOW.2));
+            add(
+                rgn,
+                px(ho.x) - sx,
+                px(ho.y) - st,
+                px(ho.x + ho.w) + sx,
+                px(ho.y + ho.h) + sb,
+                RGN_OR,
+            );
         }
         SetWindowRgn(hwnd, rgn, BOOL(1));
     }
@@ -533,6 +548,8 @@ fn serve(req: Request<Vec<u8>>, dir: &Path) -> Response<Cow<'static, [u8]>> {
         "/ai.css" => respond(200, "text/css; charset=utf-8", AI_CSS.as_bytes().to_vec()),
         "/theme.css" => respond(200, "text/css; charset=utf-8", THEME_CSS.as_bytes().to_vec()),
         "/icons.js" => respond(200, "text/javascript; charset=utf-8", ICONS_JS.as_bytes().to_vec()),
+        "/fonts/inter.woff2" => respond(200, "font/woff2", FONT_INTER.to_vec()),
+        "/fonts/nunito.woff2" => respond(200, "font/woff2", FONT_NUNITO.to_vec()),
         p if p.starts_with("/wall/") => {
             let name = &p[6..];
             if name.contains(['/', '\\']) || name.contains("..") {
@@ -1142,7 +1159,7 @@ impl App {
             .take(8)
             .map(|t| json!({"title":t.title,"url":t.url}))
             .collect();
-        json!({"cfg":s.nt,"theme":{"accent":self.settings.accent,"glass":self.settings.glass,"light":self.settings.light,"perf":self.settings.perf,"flat":!self.glass()},
+        json!({"cfg":s.nt,"theme":{"accent":self.settings.accent,"glass":self.settings.glass,"light":self.settings.light,"perf":self.settings.perf,"flat":!self.glass(),"font":self.settings.font},
                "recent":recent,"space":{"name":s.name,"color":s.color}})
     }
 
@@ -1211,7 +1228,7 @@ impl App {
             "engines":engines,"engine":self.settings.engine,"light":self.settings.light,
             "accent":self.settings.accent,"glass":self.settings.glass,"perf":self.settings.perf,"nt":s.nt,
             "layout":self.settings.layout,"glass_on":self.settings.glass_on,"glass_ok":self.glass_ok,
-            "collapsed":self.settings.side_collapsed,"setup":self.settings.setup,
+            "collapsed":self.settings.side_collapsed,"setup":self.settings.setup,"font":self.settings.font,
             "ai":{"open":self.ai_open,"w":self.ai_w,"keys":self.keys,"cfg":self.settings.ai},
             "private":store::is_private(),"version":env!("CARGO_PKG_VERSION"),"fullscreen":self.fullscreen,
             "s":{"suggest":self.settings.suggest,"blocker":self.settings.blocker,"https_only":self.settings.https_only,
@@ -2245,6 +2262,19 @@ impl App {
                 return;
             }
             "setup_done" => self.settings.setup = false,
+            "font" => {
+                let f = v.as_str().unwrap_or("inter");
+                self.settings.font = if matches!(f, "inter" | "rounded" | "system" | "serif" | "mono") {
+                    f
+                } else {
+                    "inter"
+                }
+                .into();
+                store::save_settings(&self.settings);
+                self.push_state();
+                self.push_nt();
+                return;
+            }
             "unblock_site" => {
                 if let Some(h) = v.as_str() {
                     self.blocker.allow.write().unwrap().remove(h);

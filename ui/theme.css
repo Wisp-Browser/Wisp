@@ -2,7 +2,7 @@
    body classes: .glass | .flat   ×   (default dark) | .light */
 :root{
  --accent:#5e5ce6;--accent-fg:#fff;
- --font:system-ui,"Segoe UI Variable Text","Segoe UI",sans-serif;
+ --font:"Wisp Inter",system-ui,"Segoe UI Variable Text","Segoe UI",sans-serif;
  --mono:"Cascadia Code",Consolas,monospace;
  --r-xs:6px;--r-sm:8px;--r:12px;--r-lg:16px;--r-xl:20px;--pill:999px;
  --dur:160ms;--dur-s:110ms;--dur-l:200ms;--ease:cubic-bezier(.16,.84,.44,1);
@@ -11,6 +11,14 @@
  --focus:0 0 0 2px var(--accent);
  color-scheme:dark;
 }
+/* Interface fonts (bundled, SIL OFL: ui/fonts). body.f-* picks one; Inter is the default. */
+@font-face{font-family:"Wisp Inter";src:url(/fonts/inter.woff2) format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"Wisp Nunito";src:url(/fonts/nunito.woff2) format("woff2");font-weight:200 1000;font-display:swap}
+body{font-feature-settings:"cv11"}
+body.f-rounded{--font:"Wisp Nunito","Segoe UI Variable Text","Segoe UI",sans-serif;font-feature-settings:normal}
+body.f-system{--font:system-ui,"Segoe UI Variable Text","Segoe UI",sans-serif;font-feature-settings:normal}
+body.f-serif{--font:Charter,"Bitstream Charter",Cambria,Georgia,serif;font-feature-settings:normal}
+body.f-mono{--font:"Cascadia Code","Cascadia Mono",Consolas,monospace;font-feature-settings:normal}
 /* ---- Dark · Glass (default) ---- */
 body{
  --bg:#121218;            /* window base when no OS backdrop shows */

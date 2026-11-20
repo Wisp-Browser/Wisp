@@ -112,6 +112,8 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
 .pv small{color:var(--fg2);font-size:12px;padding:0 4px;line-height:1.4}
 .mini{position:relative;height:92px;border-radius:10px;overflow:hidden;background:#24242e;border:1px solid var(--line)}
 body.light .mini{background:#dfe2ea}
+.mini.fs{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 14px;color:var(--fg)}
+.mini.fs span{font-size:30px;font-weight:600;line-height:1;letter-spacing:-.01em}.mini.fs em{font-style:normal;font-size:12px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mini i{position:absolute;display:block;border-radius:3px;background:rgba(255,255,255,.16)}
 body.light .mini i{background:rgba(0,0,0,.12)}
 .mini i.pg{background:#3a3a48;border-radius:6px}body.light .mini i.pg{background:#fff}
