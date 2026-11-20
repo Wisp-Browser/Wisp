@@ -1,0 +1,267 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Wisp</title><link rel="stylesheet" href="/ai.css"><link rel="stylesheet" href="/m5.css">
+<style>
+:root{--accent:#ff6b5e;--glow:#ff6b5e55;--gl:22,20,50;--ga:.62;--blur:22px;--line:rgba(255,255,255,.09);--soft:rgba(255,255,255,.06);--fg:#eceaff;--dim:#eceaff99;--r:14px;--t:180ms}
+body.light{--gl:255,255,255;--line:rgba(0,0,0,.1);--soft:rgba(0,0,0,.05);--fg:#1c1b33;--dim:#1c1b3399}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track,*::-webkit-scrollbar-corner{background:transparent}
+*::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.4);border-width:2px}
+body.light *::-webkit-scrollbar-thumb{background:rgba(0,0,0,.24)}
+body.light *::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.42)}
+*{box-sizing:border-box;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;font:13px "Segoe UI",Inter,system-ui,sans-serif;color:var(--fg);background:#0c0c20}
+#wall,#wallv,#dim,#stars{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#wall{background:radial-gradient(800px 500px at 75% 15%,#5a4bb855,transparent 70%),radial-gradient(700px 500px at 10% 95%,#ff6b5e22,transparent 70%),linear-gradient(160deg,#171742,#0c0c20 55%,#1d1140);background-size:cover;background-position:center}
+body.light #wall.def{background:radial-gradient(800px 500px at 75% 15%,#b9a8ff88,transparent 70%),linear-gradient(160deg,#e8e6ff,#f6efff)}
+#wallv{object-fit:cover;display:none}
+#stars{opacity:.7}
+.panel{background:rgba(var(--gl),var(--ga));backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+button{font:inherit;color:var(--fg)}
+#title{position:fixed;top:0;left:0;right:0;height:38px;display:flex;align-items:center;padding-left:14px;z-index:3}
+#title .brand{display:flex;gap:8px;align-items:center;font-weight:600;letter-spacing:.02em}
+#title img{width:20px;height:20px}
+#drag{flex:1;height:100%}
+.wc{display:flex;height:100%}
+.wc button{width:46px;border:0;background:none;font-size:14px;transition:background var(--t)}
+.wc svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round}
+.wc button:hover{background:var(--soft)}.wc button.x:hover{background:#e5484d;color:#fff}
+.rz{position:fixed;z-index:20}
+#side{position:fixed;left:12px;top:46px;bottom:12px;width:236px;padding:10px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.spaces{display:flex;align-items:center;gap:6px;padding:2px 2px 6px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.sp{height:28px;min-width:28px;border-radius:14px;border:1px solid var(--line);background:var(--soft);display:flex;align-items:center;gap:7px;padding:0 8px;cursor:default;transition:all var(--t);overflow:hidden;white-space:nowrap}
+.sp i{width:12px;height:12px;border-radius:50%;flex:none;box-shadow:0 0 8px currentColor}
+.sp:hover{border-color:color-mix(in srgb,var(--accent) 60%,transparent)}.sp:active{transform:scale(.94)}
+.sp.on{background:color-mix(in srgb,var(--accent) 16%,transparent);border-color:color-mix(in srgb,var(--accent) 55%,transparent);box-shadow:0 0 14px var(--glow);max-width:120px}
+.sp b{font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.sect{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);padding:6px 8px 2px}
+#scroll{flex:1;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.divline{height:1px;background:var(--line);margin:6px 6px}
+.tab{display:flex;align-items:center;gap:9px;height:38px;padding:0 6px 0 10px;border-radius:11px;border:1px solid transparent;position:relative;flex:none;transition:background var(--t),box-shadow var(--t),transform 120ms,border-color var(--t)}
+.tab.new{animation:pop .2s ease both}
+@keyframes pop{from{opacity:0;transform:translateX(-8px)}}
+.tab:hover{background:var(--soft)}.tab:active{transform:scale(.985)}
+.tab.active{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 26%,transparent),color-mix(in srgb,var(--accent) 8%,transparent));border-color:color-mix(in srgb,var(--accent) 45%,transparent);box-shadow:0 0 18px var(--glow)}
+.tab.insplit:not(.active){border-color:var(--line)}
+.tab.dragover{border-color:var(--accent)}
+.ic{width:16px;height:16px;border-radius:5px;background:var(--soft);display:grid;place-items:center;font-size:10px;flex:none;overflow:hidden}
+.ic img{width:16px;height:16px}
+.tab.loading .ic{animation:spin .8s linear infinite;border:2px solid var(--accent);border-top-color:transparent;background:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb{width:20px;height:20px;border:0;border-radius:6px;background:none;color:var(--dim);opacity:0;display:grid;place-items:center;font-size:11px;transition:opacity var(--t),background var(--t)}
+.tab:hover .tb,.tab.active .tb{opacity:1}.tb:hover{background:var(--soft);color:var(--fg)}
+.tb.cl{width:18px;height:18px;border-radius:5px}
+.badge{font-size:10px;color:var(--dim)}
+.btn{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:11px;border:1px solid transparent;background:none;transition:background var(--t),transform 120ms}
+.btn:hover{background:var(--soft)}.btn:active{transform:scale(.97)}
+#bar{position:fixed;left:260px;right:var(--rt,12px);top:46px;height:40px;display:flex;gap:8px;align-items:center;z-index:2}
+.nav{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:rgba(var(--gl),var(--ga));backdrop-filter:blur(var(--blur));font-size:15px;transition:all var(--t)}
+.nav:hover{box-shadow:0 0 14px var(--glow);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}.nav:active{transform:scale(.92)}
+.nav:disabled{opacity:.35;pointer-events:none}
+#omni{flex:1;height:38px;border-radius:19px;padding:0 6px 0 14px;display:flex;align-items:center;gap:8px;transition:box-shadow var(--t),border-color var(--t)}
+#omni:focus-within{border-color:color-mix(in srgb,var(--accent) 70%,transparent);box-shadow:0 0 0 3px var(--glow),0 10px 40px rgba(0,0,0,.35)}
+#omni input{flex:1;background:none;border:0;outline:0;color:var(--fg);font-size:14px;user-select:text}
+.chip{height:26px;padding:0 11px;border-radius:13px;border:1px solid var(--line);background:var(--soft);font-size:12px;transition:all var(--t);white-space:nowrap}
+.chip:hover{border-color:color-mix(in srgb,var(--accent) 65%,transparent);box-shadow:0 0 10px var(--glow)}.chip:active{transform:scale(.95)}
+#unsplit{display:none}
+.menu button{text-align:left;height:32px;border:0;border-radius:9px;background:none;padding:0 10px;transition:background var(--t);display:block;width:100%}
+.menu button:hover{background:var(--soft)}.menu button.on{color:var(--accent)}.menu button.danger:hover{background:#e5484d33}
+#ctx{position:fixed;width:190px;padding:6px;display:none;z-index:8;animation:pop .12s ease both}
+#ctx.open{display:block}
+/* split */
+.dv{position:fixed;z-index:4;border-radius:4px;transition:background var(--t),box-shadow var(--t)}
+.dv.c{cursor:col-resize}.dv.r{cursor:row-resize}
+.dv:hover,.dv.live{background:color-mix(in srgb,var(--accent) 70%,transparent);box-shadow:0 0 12px var(--glow)}
+#dz{position:fixed;left:260px;right:var(--rt,12px);top:94px;bottom:12px;display:none;z-index:5}
+#dz.open{display:block}
+.z{position:absolute;border:2px dashed var(--line);border-radius:14px;display:grid;place-items:center;color:var(--dim);background:rgba(var(--gl),.35);transition:all var(--t);font-size:13px}
+.z.over{border-color:var(--accent);color:var(--fg);background:color-mix(in srgb,var(--accent) 22%,transparent);box-shadow:0 0 24px var(--glow)}
+.z[data-e=left]{left:0;top:0;bottom:0;width:30%}.z[data-e=right]{right:0;top:0;bottom:0;width:30%}
+.z[data-e=top]{left:31%;right:31%;top:0;height:42%}.z[data-e=bottom]{left:31%;right:31%;bottom:0;height:42%}
+/* modal + palette */
+.veil{position:fixed;inset:0;background:#0008;display:none;place-items:start center;padding-top:14vh;z-index:9}
+.veil.open{display:grid;animation:fade .15s ease}@keyframes fade{from{opacity:0}}
+.box{width:440px;padding:16px}.box h3{margin:0 0 12px;font-weight:600}
+.box input[type=text],#pin{width:100%;height:40px;border-radius:11px;border:1px solid var(--line);background:var(--soft);color:var(--fg);font-size:14px;padding:0 14px;outline:0;user-select:text}
+.box input[type=text]:focus,#pin:focus{border-color:var(--accent)}
+.sw{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
+.sw i{width:26px;height:26px;border-radius:50%;cursor:default;border:2px solid transparent;transition:transform var(--t),box-shadow var(--t)}
+.sw i:hover{transform:scale(1.12)}.sw i.on{border-color:#fff;box-shadow:0 0 14px currentColor}
+.row2{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.pbtn{height:34px;padding:0 16px;border-radius:17px;border:1px solid var(--line);background:var(--soft);transition:all var(--t)}
+.pbtn:hover{border-color:var(--accent)}.pbtn:active{transform:scale(.96)}
+.pbtn.go{background:var(--accent);border-color:transparent;color:#fff;box-shadow:0 0 16px var(--glow)}
+.pbtn.del{margin-right:auto;color:#ff8a8a}
+#pal .box{width:560px;padding:10px}
+#pres{margin-top:8px;max-height:320px;overflow:auto}
+.prow{padding:9px 12px;border-radius:10px;display:flex;justify-content:space-between;gap:12px}
+.prow.sel{background:color-mix(in srgb,var(--accent) 20%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 50%,transparent)}
+.prow small{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style></head><body>
+<div id="wall" class="def"></div><video id="wallv" muted loop playsinline></video><div id="dim"></div><canvas id="stars"></canvas>
+<div class="rz" data-d="n" style="top:0;left:10px;right:10px;height:5px;cursor:n-resize"></div>
+<div class="rz" data-d="s" style="bottom:0;left:10px;right:10px;height:5px;cursor:s-resize"></div>
+<div class="rz" data-d="w" style="left:0;top:10px;bottom:10px;width:5px;cursor:w-resize"></div>
+<div class="rz" data-d="e" style="right:0;top:10px;bottom:10px;width:5px;cursor:e-resize"></div>
+<div class="rz" data-d="nw" style="top:0;left:0;width:10px;height:10px;cursor:nw-resize"></div>
+<div class="rz" data-d="ne" style="top:0;right:0;width:10px;height:10px;cursor:ne-resize"></div>
+<div class="rz" data-d="sw" style="bottom:0;left:0;width:10px;height:10px;cursor:sw-resize"></div>
+<div class="rz" data-d="se" style="bottom:0;right:0;width:10px;height:10px;cursor:se-resize"></div>
+<div id="title"><div class="brand"><img alt="" src="/logo.svg"><span>Wisp</span></div><div id="drag"></div>
+<div class="wc"><button id="min" title="Minimize"><svg viewBox="0 0 10 10"><path d="M1 5h8"/></svg></button><button id="max" title="Maximize"><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1.2"/></svg></button><button class="x" id="cls" title="Close"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button></div></div>
+<aside id="side" class="panel">
+  <div class="spaces" id="spaces"></div>
+  <div id="scroll"></div>
+  <button class="btn" id="new" style="color:var(--dim)">＋ New tab <span style="margin-left:auto;opacity:.5;font-size:11px">Ctrl+T</span></button>
+  <button class="btn" id="theme">◐ Light / Dark</button>
+</aside>
+<div id="bar">
+  <button class="nav" id="back">‹</button><button class="nav" id="fwd">›</button><button class="nav" id="rel">⟳</button>
+  <div id="omni" class="panel"><input id="url" placeholder="Search or enter address" spellcheck="false"><button class="chip" id="unsplit">⧉ Unsplit</button><button class="chip" id="aibtn" title="Wisp AI (Ctrl+J)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.3L20.5 10.5l-6.3 2.2L12 19l-2.2-6.3L3.5 10.5l6.3-2.2z" style="color:var(--accent)"/><path d="M19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z" opacity=".7"/></svg>AI</button></div>
+</div>
+<aside id="aip" class="panel"></aside>
+<div id="ctx" class="panel menu"></div>
+<div id="dz"><div class="z" data-e="left">Split left</div><div class="z" data-e="right">Split right</div><div class="z" data-e="top">Split top</div><div class="z" data-e="bottom">Split bottom</div></div>
+<div id="divs"></div>
+<div class="veil" id="spmodal"><div class="box panel"><h3 id="spt">New space</h3><input type="text" id="spn" placeholder="Space name" maxlength="24"><div class="sw" id="spc"></div>
+<div class="row2"><button class="pbtn del" id="spdel">Delete</button><button class="pbtn" id="spcancel">Cancel</button><button class="pbtn go" id="spsave">Save</button></div></div></div>
+<div class="veil" id="pal"><div class="box panel"><input id="pin" placeholder="Search tabs…  (Ctrl+K)" autocomplete="off"><div id="pres"></div></div></div>
+<script src="/ai.js"></script>
+<script src="/m5.js"></script>
+<script>
+const $=s=>document.querySelector(s),send=o=>window.ipc.postMessage(JSON.stringify(o));
+const COLORS=['#ff6b5e','#ff9f43','#f7d154','#4cd98f','#3fc8e8','#6c8cff','#a46bff','#ff6bb5'];
+let S={spaces:[],tabs:[],active:-1,split:null,divs:[],engines:[],engine:'ddg',light:false,accent:'#ff6b5e',glass:.5,nt:null},dragId=null,editing=null,spColor=COLORS[0];
+const XI='<svg viewBox="0 0 10 10" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 2l6 6M8 2l-6 6"/></svg>';
+const ic=t=>{try{const u=new URL(t.url);if(u.protocol.startsWith('http'))return `<img src="${u.origin}/favicon.ico" alt="${(t.title||'•')[0].toUpperCase().replace(/[^A-Z0-9a-z•]/g,'•')}" onerror="this.parentNode.textContent=this.alt">`}catch(e){}return t.url==='wisp://newtab'?'<img src="/logo.svg">':(t.title||'•')[0].toUpperCase()};
+const tabEls=new Map(),extraEls=new Map();let firstRender=true,spaceSig='';
+function mkTab(){const d=document.createElement('div');d.draggable=true;d.className='tab'+(firstRender?'':' new');
+  d.innerHTML=`<span class="ic"></span><span class="tt"></span><span class="badge"></span><button class="tb pn"></button><button class="tb cl" title="Close">${XI}</button>`;
+  d.addEventListener('animationend',()=>d.classList.remove('new'));
+  d.onclick=()=>send({t:'select',id:d._t.id});
+  d.querySelector('.cl').onclick=e=>{e.stopPropagation();send({t:'close',id:d._t.id})};
+  d.querySelector('.pn').onclick=e=>{e.stopPropagation();send({t:'pin',id:d._t.id})};
+  d.onauxclick=e=>{if(e.button===1)send({t:'close',id:d._t.id})};
+  d.oncontextmenu=e=>{e.preventDefault();ctx(d._t,e.clientX,e.clientY)};
+  d.ondragstart=e=>{dragId=d._t.id;e.dataTransfer.setData('text/plain',String(d._t.id));setTimeout(()=>{send({t:'drag',on:true});$('#dz').classList.add('open')},0)};
+  d.ondragend=()=>{dragId=null;$('#dz').classList.remove('open');send({t:'drag',on:false})};
+  d.ondragover=e=>{e.preventDefault();d.classList.add('dragover')};d.ondragleave=()=>d.classList.remove('dragover');
+  d.ondrop=e=>{e.preventDefault();d.classList.remove('dragover');if(dragId!==null&&dragId!==d._t.id)send({t:'move',id:dragId,to:d._t.id})};
+  return d}
+// Update a tab row in place (no rebuild, no animation) when its title/url/state changes.
+function updTab(d,t){d._t=t;const c=d.classList;
+  c.toggle('active',t.id===S.active);c.toggle('loading',!!t.loading&&t.url!=='wisp://newtab');c.toggle('insplit',!!(S.split&&S.split.includes(t.id)));c.toggle('hib',!!t.hib);
+  const ik=((t.loading&&t.url!=='wisp://newtab')?'L|':'')+t.url.split('/').slice(0,3).join('/')+'|'+(t.title||'•')[0];if(d._ik!==ik){d._ik=ik;d.querySelector('.ic').innerHTML=(t.loading&&t.url!=='wisp://newtab')?'':ic(t)}
+  const tt=d.querySelector('.tt'),txt=t.title||'New Tab';if(tt.textContent!==txt)tt.textContent=txt;
+  const b=d.querySelector('.badge');b.textContent=t.muted?'🔇':'';
+  const pn=d.querySelector('.pn');pn.textContent=t.pinned?'◆':'◇';pn.title=t.pinned?'Unpin':'Pin'}
+function secEl(k,cls,txt){let e=extraEls.get(k);if(!e){e=document.createElement('div');e.className=cls;if(txt)e.textContent=txt;extraEls.set(k,e)}return e}
+function syncTabs(){const sc=$('#scroll'),pins=S.tabs.filter(t=>t.pinned),rest=S.tabs.filter(t=>!t.pinned),want=[];
+  const get=t=>{let d=tabEls.get(t.id);if(!d){d=mkTab();tabEls.set(t.id,d)}updTab(d,t);return d};
+  if(pins.length){want.push(secEl('hp','sect','Pinned'),...pins.map(get),secEl('dv','divline'))}
+  want.push(secEl('ht','sect','Tabs'),...rest.map(get));
+  want.forEach((el,i)=>{if(sc.children[i]!==el)sc.insertBefore(el,sc.children[i]||null)});
+  while(sc.children.length>want.length)sc.lastChild.remove();
+  const ids=new Set(S.tabs.map(t=>t.id));tabEls.forEach((el,id)=>{if(!ids.has(id))tabEls.delete(id)});firstRender=false}
+function render(){
+  document.body.classList.toggle('light',!!S.light||!!(S.nt&&S.nt.wall&&S.nt.wall.light));
+  // theme
+  document.documentElement.style.setProperty('--accent',S.accent);document.documentElement.style.setProperty('--glow',S.accent+'55');
+  document.documentElement.style.setProperty('--ga',(S.light?.4:.3)+S.glass*.55);document.documentElement.style.setProperty('--blur',(S.perf?4:6+S.glass*12)+'px');
+  wall(S.nt);
+  // spaces
+  const sp=$('#spaces'),sig=JSON.stringify(S.spaces)+S.cur;
+  if(sig!==spaceSig){spaceSig=sig;sp.innerHTML='';
+  S.spaces.forEach(s=>{const b=document.createElement('div');const on=s.id===S.cur;b.className='sp'+(on?' on':'');b.title=s.name+(on?' — click to edit':'');
+    b.innerHTML=`<i style="background:${s.color};color:${s.color}"></i>${on?'<b></b>':''}`;if(on)b.querySelector('b').textContent=s.name;
+    b.onclick=()=>on?openSpace(s):send({t:'space_switch',id:s.id});sp.appendChild(b)});
+  const add=document.createElement('div');add.className='sp';add.textContent='＋';add.title='New space';add.style.justifyContent='center';add.onclick=()=>openSpace(null);sp.appendChild(add)}
+  // tabs
+  syncTabs();
+  const a=S.tabs.find(t=>t.id===S.active);
+  if(a&&document.activeElement!==$('#url'))$('#url').value=a.url==='wisp://newtab'?'':a.url;
+  $('#back').disabled=!a||!a.back;$('#fwd').disabled=!a||!a.fwd;
+  $('#unsplit').style.display=S.split?'block':'none';
+  divs();
+}
+function divs(){const c=$('#divs');c.innerHTML='';(S.divs||[]).forEach(d=>{const e=document.createElement('div');e.className='dv '+(d.col?'c':'r');
+  Object.assign(e.style,{left:d.x+'px',top:d.y+'px',width:d.w+'px',height:d.h+'px'});
+  let raf=0;e.onpointerdown=ev=>{e.setPointerCapture(ev.pointerId);e.classList.add('live')};
+  e.onpointermove=ev=>{if(!e.classList.contains('live')||raf)return;raf=requestAnimationFrame(()=>{raf=0;send({t:'div',col:d.col,idx:d.idx,pos:d.col?ev.clientX:ev.clientY});
+    if(d.col)e.style.left=(ev.clientX-d.w/2)+'px';else e.style.top=(ev.clientY-d.h/2)+'px'})};
+  e.onpointerup=()=>{e.classList.remove('live');send({t:'divend'})};c.appendChild(e)})}
+// wallpaper
+let lastWall='',lastWall2='';
+function wall(nt){const cfg=nt||{},w=cfg.wall,key=JSON.stringify([w,cfg.blur,cfg.dim]);
+  const el=$('#wall'),v=$('#wallv');fxo.set(S.perf?'none':(cfg.effect||'stars'),cfg.speed,20);if(key===lastWall2)return;lastWall2=key;v.style.display='none';v.pause();el.className='';el.style.background='';el.style.backgroundImage='';
+  if(!w){el.className='def'}else if(w.kind==='video'){v.src=w.url;v.style.display='block';v.play().catch(()=>{})}
+  else if(w.kind==='image'){el.style.background=`center/cover no-repeat url("${w.url}")`}
+  else el.style.background=w.css||w.color||'#14142c';
+  const bl=cfg.blur?`blur(${cfg.blur}px)`:'none',tf=cfg.blur?'scale(1.05)':'none';el.style.filter=bl;v.style.filter=bl;el.style.transform=tf;v.style.transform=tf;
+  $('#dim').style.background=`rgba(0,0,0,${(cfg.dim||0)/100})`;
+  }
+window.wisp={state:s=>{S=Object.assign(S,s);render();if(window.AI)AI.state(S);if(window.M5)M5.state(S)},nt:n=>{S.nt=n;document.body.classList.toggle('light',!!S.light||!!(n&&n.wall&&n.wall.light));wall(n)},palette:()=>pal(true),ai:e=>window.AI&&AI.event(e)};
+// controls
+$('#url').addEventListener('keydown',e=>{if(e.key==='Enter'){send({t:'go',input:e.target.value});e.target.blur()}});
+$('#url').addEventListener('focus',e=>e.target.select());
+$('#new').onclick=()=>send({t:'new'});$('#back').onclick=()=>send({t:'back'});$('#fwd').onclick=()=>send({t:'fwd'});$('#rel').onclick=()=>send({t:'reload'});
+$('#theme').onclick=()=>send({t:'theme'});$('#aibtn').onclick=()=>AI.toggle();$('#unsplit').onclick=()=>send({t:'unsplit'});
+$('#min').onclick=()=>send({t:'win',op:'min'});$('#max').onclick=()=>send({t:'win',op:'max'});$('#cls').onclick=()=>send({t:'win',op:'close'});
+$('#drag').onmousedown=e=>{if(e.button===0)send({t:'win',op:'drag'})};$('#drag').ondblclick=()=>send({t:'win',op:'max'});
+document.querySelectorAll('.rz').forEach(r=>r.onmousedown=e=>{if(e.button===0)send({t:'win',op:r.dataset.d})});
+addEventListener('click',e=>{if(!e.target.closest('#ctx'))$('#ctx').classList.remove('open')});
+// context menu
+function ctx(t,x,y){const m=$('#ctx');m.innerHTML='';
+  const it=(l,f,c)=>{const b=document.createElement('button');b.textContent=l;if(c)b.className=c;b.onclick=()=>{m.classList.remove('open');f()};m.appendChild(b)};
+  it(t.pinned?'Unpin tab':'Pin tab',()=>send({t:'pin',id:t.id}));it('Duplicate',()=>send({t:'dup',id:t.id}));it(t.muted?'Unmute tab':'Mute tab',()=>send({t:'mute',id:t.id}));
+  if(t.id!==S.active)it('Open in split (right)',()=>send({t:'split',id:t.id,edge:'right'}));
+  it('Close tab',()=>send({t:'close',id:t.id}),'danger');
+  m.style.left=Math.min(x,60)+'px';m.style.top=Math.min(y,innerHeight-200)+'px';m.classList.add('open')}
+// drop zones
+document.querySelectorAll('.z').forEach(z=>{z.ondragover=e=>{e.preventDefault();z.classList.add('over')};z.ondragleave=()=>z.classList.remove('over');
+  z.ondrop=e=>{e.preventDefault();z.classList.remove('over');$('#dz').classList.remove('open');if(dragId!==null)send({t:'split',id:dragId,edge:z.dataset.e});send({t:'drag',on:false});dragId=null}});
+// space modal
+function openSpace(s){editing=s;$('#spt').textContent=s?'Edit space':'New space';$('#spn').value=s?s.name:'';spColor=s?s.color:COLORS[S.spaces.length%COLORS.length];$('#spdel').style.display=s&&S.spaces.length>1?'block':'none';
+  const c=$('#spc');c.innerHTML='';COLORS.forEach(k=>{const i=document.createElement('i');i.style.background=k;i.style.color=k;if(k===spColor)i.className='on';i.onclick=()=>{spColor=k;c.querySelectorAll('i').forEach(x=>x.className='');i.className='on'};c.appendChild(i)});
+  $('#spmodal').classList.add('open');$('#spn').focus()}
+function closeSpace(){$('#spmodal').classList.remove('open')}
+$('#spcancel').onclick=closeSpace;
+$('#spsave').onclick=()=>{const n=$('#spn').value.trim()||'Space';send(editing?{t:'space_edit',id:editing.id,name:n,color:spColor}:{t:'space_new',name:n,color:spColor});closeSpace()};
+$('#spdel').onclick=()=>{send({t:'space_delete',id:editing.id});closeSpace()};
+$('#spn').onkeydown=e=>{if(e.key==='Enter')$('#spsave').click();if(e.key==='Escape')closeSpace()};
+$('#spmodal').onmousedown=e=>{if(e.target===$('#spmodal'))closeSpace()};
+// tab search / palette
+let pi=0;function pal(open){if(open&&window.M5)M5.palette()}
+function fill(){const q=$('#pin').value.toLowerCase();const r=S.tabs.filter(t=>(t.title+t.url).toLowerCase().includes(q));pi=Math.min(pi,Math.max(0,r.length-1));
+  const c=$('#pres');c.innerHTML='';r.forEach((t,i)=>{const d=document.createElement('div');d.className='prow'+(i===pi?' sel':'');d.innerHTML='<span></span><small></small>';d.children[0].textContent=t.title||'New Tab';d.children[1].textContent=t.url;d.onclick=()=>{send({t:'select',id:t.id});pal(false)};c.appendChild(d)});c._r=r}
+$('#pin').oninput=()=>{pi=0;fill()};
+$('#pin').onkeydown=e=>{const r=$('#pres')._r||[];if(e.key==='ArrowDown'){pi=Math.min(pi+1,r.length-1);fill()}else if(e.key==='ArrowUp'){pi=Math.max(pi-1,0);fill()}else if(e.key==='Enter'&&r[pi]){send({t:'select',id:r[pi].id});pal(false)}else if(e.key==='Escape')pal(false)};
+$('#pal').onmousedown=e=>{if(e.target===$('#pal'))pal(false)};
+
+
+function makeFx(canvas){const cx=canvas.getContext('2d');let P=[],raf=0,last=0,mode='none',speed=1,w=0,h=0,shoot=null,nextShoot=3e3,gap=40,hold=0;
+ const R=Math.random;
+ function init(){w=canvas.width=innerWidth;h=canvas.height=innerHeight;const n=mode==='particles'?70:110;P=[];
+  for(let i=0;i<n;i++){const z=R();P.push({x:R()*w,y:R()*h,z,r:.5+z*1.7,a:R()*6.28,tw:.6+R()*1.6,d:R()*6.28})}}
+ function loop(t){raf=requestAnimationFrame(loop);if(t-last<gap||t<hold)return;const dt=Math.min((t-last)/1000,.1);last=t;cx.clearRect(0,0,w,h);cx.fillStyle='#fff';
+  if(mode==='stars'){
+   for(const p of P){const v=(14+p.z*46)*speed;p.x+=v*dt*.94;p.y+=v*dt*.34;p.a+=p.tw*dt*speed;
+    if(p.x>w+6)p.x=-6;if(p.y>h+6)p.y=-6;cx.globalAlpha=.2+.7*Math.abs(Math.sin(p.a))*(.4+p.z*.6);cx.beginPath();cx.arc(p.x,p.y,p.r,0,7);cx.fill()}
+   nextShoot-=dt*1000*speed;if(!shoot&&nextShoot<0){shoot={x:R()*w*.8,y:R()*h*.4,l:0};nextShoot=4e3+R()*7e3}
+   if(shoot){shoot.l+=dt*speed*1.4;const k=shoot.l,x=shoot.x+k*700,y=shoot.y+k*260,g=cx.createLinearGradient(x-120,y-44,x,y);
+    g.addColorStop(0,'rgba(255,255,255,0)');g.addColorStop(1,'rgba(255,255,255,.9)');cx.globalAlpha=Math.max(0,1-k);cx.strokeStyle=g;cx.lineWidth=1.6;cx.beginPath();cx.moveTo(x-120,y-44);cx.lineTo(x,y);cx.stroke();if(k>1)shoot=null}
+  }else{
+   for(const p of P){p.d+=(R()-.5)*2.2*dt;const v=(26+p.z*70)*speed;p.x+=Math.cos(p.d)*v*dt;p.y+=Math.sin(p.d)*v*dt;
+    if(p.x<-8)p.x=w+8;if(p.x>w+8)p.x=-8;if(p.y<-8)p.y=h+8;if(p.y>h+8)p.y=-8}
+   cx.lineWidth=1;for(let i=0;i<P.length;i++){const a=P[i];for(let j=i+1;j<P.length;j++){const b=P[j],dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy;
+     if(d2<12100){cx.globalAlpha=.16*(1-d2/12100);cx.strokeStyle='#fff';cx.beginPath();cx.moveTo(a.x,a.y);cx.lineTo(b.x,b.y);cx.stroke()}}}
+   cx.globalAlpha=.55;for(const p of P){cx.beginPath();cx.arc(p.x,p.y,p.r*1.5,0,7);cx.fill()}}}
+ function stop(){cancelAnimationFrame(raf);raf=0;cx.clearRect(0,0,canvas.width,canvas.height)}
+ function start(){if(raf||document.hidden||mode==='none')return;last=performance.now();raf=requestAnimationFrame(loop)}
+ document.addEventListener('visibilitychange',()=>document.hidden?cancelAnimationFrame(raf)||(raf=0):start());
+ addEventListener('resize',()=>{if(mode!=='none'){init()}});
+ return{pause(ms){hold=performance.now()+ms},set(m,s,fps){m=m||'none';s=s||1;gap=1000/(fps||25);const changed=m!==mode;mode=m;speed=s;if(m==='none'){stop();canvas.style.display='none';return}
+   canvas.style.display='block';if(changed||!P.length)init();start()}}}
+const fxo=makeFx($('#stars'));
+send({t:'ready'});
+</script></body></html>

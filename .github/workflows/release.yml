@@ -1,0 +1,100 @@
+name: Release
+
+# Push a tag like v1.2.3 (or v1.3.0-beta.1 for the beta channel) to publish a release.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Optional code signing. Add these two repository secrets to turn it on (see README).
+  HAS_CERT: ${{ secrets.WINDOWS_CERT_BASE64 != '' }}
+  WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+  WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+
+jobs:
+  windows:
+    name: Build and publish (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches Cargo.toml
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          $cargo = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          if ($tag -ne $cargo) {
+            Write-Error "Tag v$tag does not match the version in Cargo.toml ($cargo). Bump Cargo.toml first."
+            exit 1
+          }
+          "VERSION=$cargo" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: "Build (release profile: LTO, size-optimised, stripped)"
+        run: cargo build --release --locked
+
+      - name: Install signing tools and certificate (optional)
+        if: env.HAS_CERT == 'true'
+        shell: pwsh
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
+          $tool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          "SIGNTOOL=$($tool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Sign Wisp.exe (optional)
+        if: env.HAS_CERT == 'true'
+        shell: pwsh
+        run: |
+          & $env:SIGNTOOL sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 target\release\Wisp.exe
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis -y --no-progress
+
+      - name: Build the installer and the auto-update payload
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target\release\Wisp.exe "dist\Wisp-$env:VERSION-windows-x64.exe"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" "-DVERSION=$env:VERSION" "-DEXE_PATH=$PWD\target\release\Wisp.exe" "-DOUT_FILE=$PWD\dist\Wisp-$env:VERSION-setup.exe" installer\wisp.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sign the installer (optional)
+        if: env.HAS_CERT == 'true'
+        shell: pwsh
+        run: |
+          & $env:SIGNTOOL sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist\Wisp-$env:VERSION-setup.exe"
+
+      - name: Checksums and update feed
+        shell: pwsh
+        run: |
+          Set-Location dist
+          $exe = "Wisp-$env:VERSION-windows-x64.exe"
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          @{
+            version = $env:VERSION
+            url     = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$exe"
+            sha256  = $sha
+            notes   = "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          } | ConvertTo-Json | Out-File -Encoding ascii latest.json
+          Get-ChildItem -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' } | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Out-File -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+
+      - name: Publish the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            dist/*.exe
+            dist/SHA256SUMS.txt
+            dist/latest.json

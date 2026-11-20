@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in Wisp doesn't work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead? A screenshot or short screen recording helps a lot.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Wisp version
+      description: Settings → About
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+  - type: input
+    id: webview
+    attributes:
+      label: WebView2 runtime version (if you know it)
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
