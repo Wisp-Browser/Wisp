@@ -40,8 +40,10 @@ body.light .clock{color:var(--fg);text-shadow:0 1px 16px rgba(255,255,255,.6)}
 .dtabs{display:flex;margin:12px 0 0}.dtabs .seg{flex:1}.dtabs .seg button{flex:1}
 .dbody{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 16px 18px}
 .gal{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.gal button{position:relative;height:50px;border-radius:10px;border:2px solid transparent;display:flex;align-items:flex-end;justify-content:flex-start;padding:0 0 4px 6px;box-shadow:inset 0 0 0 1px rgba(127,127,127,.25);transition:transform var(--dur) var(--ease),border-color var(--dur) var(--ease)}
-.gal button:hover{transform:scale(1.05)}.gal button.on{border-color:var(--accent)}
+/* No border: a gradient would repeat into a transparent border and show its far colour as a thin
+   frame. The outline and the selected ring are shadows instead. */
+.gal button{position:relative;height:50px;border-radius:10px;border:0;background-origin:border-box;display:flex;align-items:flex-end;justify-content:flex-start;padding:0 0 6px 8px;box-shadow:inset 0 0 0 1px rgba(127,127,127,.25);transition:transform var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
+.gal button:hover{transform:scale(1.05)}.gal button.on{box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 0 0 2px var(--accent)}
 .gal button span{font-size:10px;text-shadow:0 1px 4px #000a;color:#fff;opacity:0;transition:opacity var(--dur) var(--ease)}.gal button:hover span{opacity:1}
 .btn{height:34px;padding:0 15px;border-radius:var(--pill);border:1px solid var(--line-2);background:var(--raised);color:var(--fg);display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:background-color var(--dur) var(--ease),transform var(--dur-s) var(--ease)}
 .btn:hover{background:var(--raised-2)}.btn:active{transform:scale(.96)}.btn.on{background:var(--accent);color:var(--accent-fg);border-color:transparent}
