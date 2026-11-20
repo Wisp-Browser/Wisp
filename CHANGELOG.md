@@ -6,6 +6,13 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Wisp AI (free)**: a built-in free model (GPT-OSS 20B via Pollinations.ai) that works with no sign-in or
+  API key. It is the default AI provider; the key-based providers, Ollama and the web apps are still available.
+
+### Fixed
+- Removed the dark, jagged outline drawn around the page.
+
 ## [0.2.0] - 2026-11-20
 
 A full redesign of the interface. Features, settings and data are unchanged.

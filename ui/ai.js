@@ -2,6 +2,7 @@
 (function(){
 const $=s=>document.querySelector(s),post=o=>window.ipc.postMessage(JSON.stringify(o));
 const PROVS=[
+ {id:'free',name:'Wisp AI (free)',def:'openai',free:true},
  {id:'gemini',name:'Google Gemini',key:true,link:'https://aistudio.google.com/apikey',def:'gemini-2.5-flash'},
  {id:'groq',name:'Groq',key:true,link:'https://console.groq.com/keys',def:'llama-3.3-70b-versatile'},
  {id:'openrouter',name:'OpenRouter (free models)',key:true,link:'https://openrouter.ai/keys',def:'meta-llama/llama-3.3-70b-instruct:free'},
@@ -11,10 +12,10 @@ const PROVS=[
  {id:'web:gemini',name:'Gemini (web login)',url:'https://gemini.google.com'}];
 const LANGS=['English','Spanish','French','German','Portuguese','Italian','Japanese','Korean','Chinese','Arabic','Hindi','Russian'];
 const CTXS=[['none','No page context'],['page','This page'],['tabs','All open tabs']];
-let A={open:false,w:380,keys:{},cfg:{provider:'ollama',models:{},ollama:'http://127.0.0.1:11434',lang:'English',ctx:'none'},
+let A={open:false,w:380,keys:{},cfg:{provider:'free',models:{},ollama:'http://127.0.0.1:11434',lang:'English',ctx:'none'},
   chats:[],cur:null,streaming:null,models:{},hist:false,space:null,first:true,keyerr:'',draft:''};
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-const prov=()=>PROVS.find(p=>p.id===A.cfg.provider)||PROVS[3];
+const prov=()=>PROVS.find(p=>p.id===A.cfg.provider)||PROVS[0];
 const isWeb=()=>!!prov().url;
 const chat=()=>A.chats.find(c=>c.id===A.cur);
 const model=()=>{const p=prov();return (A.cfg.models&&A.cfg.models[p.id])||((A.models[p.id]&&A.models[p.id].list||[])[0])||p.def||''};
@@ -90,7 +91,7 @@ function layout(){const r=document.documentElement.style;r.setProperty('--aiw',A
 function needsKey(){const p=prov();return p.key&&!A.keys[p.id]}
 function renderHead(){
  dd($('#aprov'),PROVS.map(p=>({id:p.id,name:p.name})),A.cfg.provider,id=>{A.cfg.provider=id;saveCfg();onProvider()});
- const p=prov(),mh=$('#amod');mh.style.display=p.url?'none':'';
+ const p=prov(),mh=$('#amod');mh.style.display=p.url||p.free?'none':'';
  if(!p.url){const ms=A.models[p.id];const list=((ms&&ms.list)||[]).map(x=>({id:x,name:x}));
   if(!list.length&&p.def)list.push({id:p.def,name:p.def});
   dd(mh,list,model(),id=>{A.cfg.models[p.id]=id;saveCfg();renderHead()},ms&&ms.loading?'Loading models…':(p.id==='ollama'?'No models found':'Model'))}}
@@ -105,6 +106,7 @@ function emptyCard(){const p=prov(),c=document.createElement('div');c.className=
  if(p.id==='ollama'){const ms=A.models.ollama;extra=`<div class="ollama"><label>Ollama address</label><div class="row"><input id="oin" value="${esc(A.cfg.ollama)}" spellcheck="false"><button class="pb" id="oretry">Connect</button></div>
    ${ms&&ms.error?`<p style="margin-top:8px;color:#ff8f8f">${esc(ms.error)}</p><p style="margin-top:6px">Install Ollama from <span class="lk" id="olink">ollama.com</span>, then run <code>ollama pull llama3.2</code>.</p>`:''}</div>`}
  else if(p.key)extra=`<p style="margin-top:12px"><span class="lk" id="krm">Remove saved key</span></p>`;
+ else if(p.free)extra=`<p style="margin-top:12px">Free built-in model — no sign-in or key. Messages (and page text, when you ask about a page) are sent to Pollinations.ai to answer.</p>`;
  c.innerHTML=`<img src="/logo.svg" alt=""><h3>How can I help?</h3><p>Chat, or use the shortcuts below to work with the page you're on.<br>Tip: select text on any page, right-click, and choose “Explain with Wisp AI”.</p>${extra}`;
  setTimeout(()=>{const r=c.querySelector('#oretry');if(r){r.onclick=()=>{A.cfg.ollama=c.querySelector('#oin').value.trim()||'http://127.0.0.1:11434';saveCfg();A.models.ollama={loading:true};renderHead();post({t:'ai_models',provider:'ollama'})};
    const l=c.querySelector('#olink');if(l)l.onclick=()=>post({t:'open',url:'https://ollama.com'})}
@@ -157,7 +159,7 @@ function event(e){
    if(e.mode==='translate')send(`Translate to ${A.cfg.lang}:\n\n> ${q}`,'none');else send(`Explain this selected text clearly and briefly:\n\n> ${q}`,'none')}}
 
 function state(S){const ai=S.ai||{};const wasOpen=A.open;A.open=!!ai.open;A.w=ai.w||380;A.keys=ai.keys||{};
- if(A.first){A.first=false;A.cfg=Object.assign(A.cfg,ai.cfg||{});A.cfg.models=A.cfg.models||{};build();post({t:'ai_load'});A.space=S.cur;onProvider()}
+ if(A.first){A.first=false;A.cfg=Object.assign(A.cfg,ai.cfg||{});A.cfg.models=A.cfg.models||{};if(!A.cfg.freeDefault){A.cfg.freeDefault=true;A.cfg.provider='free';saveCfg()}build();post({t:'ai_load'});A.space=S.cur;onProvider()}
  else if(S.cur!==A.space){A.space=S.cur;A.cur=null;A.chats=[];post({t:'ai_load'});renderMsgs();renderHist()}
  layout();
  if(A.open&&!wasOpen){renderHead();if(!isWeb()&&!A.models[prov().id])fetchModels();setTimeout(()=>{const t=$('#ain2');if(t)t.focus()},250)}

@@ -9,6 +9,10 @@ use std::{
 
 pub const PROVIDERS: &[&str] = &["gemini", "groq", "openrouter", "ollama"];
 
+/// Built-in free model: no account or API key. Served anonymously by Pollinations (rate-limited).
+pub const FREE_URL: &str = "https://text.pollinations.ai/openai";
+pub const FREE_MODEL: &str = "openai";
+
 #[derive(Clone, Debug)]
 pub struct Msg {
     pub role: String,
@@ -153,6 +157,7 @@ fn get(url: &str, headers: &[(&str, String)], local: bool) -> Result<Value, Stri
 
 pub fn list_models(provider: &str, ollama: &str) -> Result<Vec<String>, String> {
     let mut out: Vec<String> = match provider {
+        "free" => vec![FREE_MODEL.to_string()],
         "gemini" => {
             let key = get_key("gemini").ok_or("No API key saved.")?;
             let v = get(
@@ -283,6 +288,12 @@ pub fn stream(req: &Req, stop: &AtomicBool, on: &mut dyn FnMut(&str)) -> Result<
                 false,
             )?
         }
+        "free" => post(
+            FREE_URL,
+            &[],
+            &json!({"model":FREE_MODEL,"messages":openai_messages(req),"stream":true,"referrer":"wisp-browser"}),
+            false,
+        )?,
         "ollama" => post(
             &format!("{}/api/chat", clean_base(&req.ollama)),
             &[],
