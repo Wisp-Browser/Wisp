@@ -1,17 +1,19 @@
 //! UIKit / WebKit side of Wisp for iOS.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ptr::NonNull;
 
 use block2::{DynBlock, RcBlock};
 use objc2::rc::{Allocated, Retained};
-use objc2::runtime::{AnyClass, AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
+use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
 use objc2::{define_class, msg_send, ClassType, DefinedClass, MainThreadMarker, MainThreadOnly};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
-use objc2_foundation::{NSDictionary, NSError, NSHomeDirectory, NSString, NSURLRequest, NSURL};
+use objc2_foundation::{NSArray, NSDictionary, NSError, NSHomeDirectory, NSString, NSURLRequest, NSURL};
 use objc2_ui_kit::{
-    UIApplication, UIApplicationDelegate, UIBlurEffect, UIBlurEffectStyle, UIColor, UIEdgeInsets, UIPasteboard, UIScreen, UIView,
-    UIViewAnimationOptions, UIViewController, UIVisualEffect, UIVisualEffectView, UIWindow,
+    UIAction, UIApplication, UIApplicationDelegate, UIBlurEffect, UIBlurEffectStyle, UIButton, UIButtonConfiguration, UIColor,
+    UIControlEvents, UIEdgeInsets, UIImage, UIMenu, UIMenuElement, UIMenuElementAttributes, UIMenuElementState, UIMenuOptions,
+    UIPasteboard, UIScreen, UIView, UIViewAnimationOptions, UIViewController, UIVisualEffectView, UIWindow,
 };
 use objc2_web_kit::{
     WKContentRuleList, WKContentRuleListStore, WKNavigation, WKNavigationAction, WKNavigationActionPolicy, WKNavigationDelegate,
@@ -21,6 +23,9 @@ use objc2_web_kit::{
 
 use crate::core::{self, Changed, Session};
 use crate::omni;
+use serde_json::json;
+
+use crate::glass::{spring, Glass, Spec};
 use crate::wk::WKWebView;
 
 const CHROME_HTML: &str = include_str!("../ui/chrome.html");
@@ -77,50 +82,15 @@ struct Browser {
     last_push: String,
     /// The tab whose page is on screen (to cross-fade when it changes).
     shown: u64,
-    /// Native glass shapes behind the interface's buttons and panels (Liquid Glass on iOS 26).
-    shapes: Vec<Shape>,
-    /// Where the bar takes touches, as measured by the interface.
-    hot_bar: Option<CGRect>,
+    /// Native glass: Liquid Glass buttons and shapes (iOS 26), or blur shapes before that.
+    glass: Glass,
+    /// Where the bar takes touches, as measured by the interface (the native glass buttons take
+    /// their own touches).
+    hot_bar: Vec<CGRect>,
+    /// What the native menu was last built from.
+    menu_sig: String,
     /// The open sheet wants the full-screen blur behind it (the menu uses a glass panel instead).
     blur: bool,
-}
-
-struct Shape {
-    view: Retained<UIVisualEffectView>,
-    on: bool,
-}
-
-/// Apple's Liquid Glass (`UIGlassEffect`, iOS 26) when available, otherwise the system blur.
-fn glass_effect(mtm: MainThreadMarker) -> Retained<UIVisualEffect> {
-    if let Some(cls) = AnyClass::get(c"UIGlassEffect") {
-        let e: Option<Retained<UIVisualEffect>> = unsafe { msg_send![cls, effectWithStyle: 0isize] };
-        if let Some(e) = e {
-            return e;
-        }
-    }
-    Retained::into_super(UIBlurEffect::effectWithStyle(UIBlurEffectStyle::SystemChromeMaterial, mtm))
-}
-
-fn set_corner(v: &UIView, r: f64) {
-    unsafe {
-        let layer: Retained<AnyObject> = msg_send![v, layer];
-        let _: () = msg_send![&*layer, setCornerRadius: r];
-        let _: () = msg_send![&*layer, setCornerCurve: &*ns("continuous")];
-    }
-}
-
-fn spring(mtm: MainThreadMarker, secs: f64, f: impl Fn() + 'static) {
-    let anim = RcBlock::new(f);
-    UIView::animateWithDuration_delay_usingSpringWithDamping_initialSpringVelocity_options_animations_completion(
-        secs,
-        0.0,
-        0.86,
-        0.0,
-        UIViewAnimationOptions::AllowUserInteraction | UIViewAnimationOptions::BeginFromCurrentState,
-        &anim,
-        None,
-        mtm,
-    );
 }
 
 thread_local! {
@@ -165,13 +135,9 @@ impl Browser {
         let b = self.root.bounds();
         self.pass.setFrame(b);
         self.chrome.setFrame(b);
-        let area = if self.full {
-            b
-        } else {
-            self.hot_bar.unwrap_or_else(|| self.bar_rect())
-        };
-        self.pass.ivars().hot.set(area);
+        self.set_hot();
         self.effect.setFrame(b);
+        self.glass.layout(b);
         let pf = self.page_frame();
         for v in self.views.values() {
             v.setFrame(pf);
@@ -195,60 +161,139 @@ impl Browser {
         sv.setVerticalScrollIndicatorInsets(i);
     }
 
-    /// Place the native glass shapes (screen rects + corner radius) the interface asked for.
-    /// Existing shapes glide to their new place, new ones fade in, unused ones fade out.
-    fn set_shapes(&mut self, rects: &[[f64; 5]], hot: Option<CGRect>) {
-        self.hot_bar = hot;
-        if !self.full {
-            if let Some(h) = hot {
-                self.pass.ivars().hot.set(h);
-            }
+    /// Where the interface takes touches: everything while a sheet is open, otherwise the bar.
+    fn set_hot(&self) {
+        let hot = if self.full {
+            vec![self.root.bounds()]
+        } else if self.hot_bar.is_empty() {
+            vec![self.bar_rect()]
+        } else {
+            self.hot_bar.clone()
+        };
+        *self.pass.ivars().hot.borrow_mut() = hot;
+    }
+
+    /// Native Liquid Glass buttons are in use (iOS 26, Glass style).
+    fn native(&self) -> bool {
+        crate::glass::liquid_glass() && self.s.settings.glass
+    }
+
+    fn chrome_js(&self, js: &str) {
+        unsafe { self.chrome.evaluateJavaScript_completionHandler(&ns(js), None) };
+    }
+
+    /// Keep the native glass buttons in step: back enabled, tab count, the menu's items.
+    fn update_buttons(&mut self, back: bool, fwd: bool) {
+        if let Some(b) = self.glass.button("back") {
+            b.setEnabled(back);
         }
-        for (i, r) in rects.iter().enumerate() {
-            let f = rect(r[0], r[1], r[2], r[3]);
-            let radius = r[4].min(r[2] / 2.0).min(r[3] / 2.0).max(0.0);
-            if i == self.shapes.len() {
-                let v = UIVisualEffectView::initWithEffect(UIVisualEffectView::alloc(self.mtm), Some(&glass_effect(self.mtm)));
-                v.setClipsToBounds(true);
-                v.setUserInteractionEnabled(false);
-                v.setAlpha(0.0);
-                self.root.insertSubview_belowSubview(&v, &self.pass);
-                self.shapes.push(Shape { view: v, on: false });
-            }
-            let sh = &mut self.shapes[i];
-            let v = sh.view.clone();
-            if sh.on {
-                spring(self.mtm, 0.36, move || {
-                    v.setFrame(f);
-                    set_corner(&v, radius);
-                });
+        if let Some(b) = self.glass.button("tabs") {
+            let n = self.s.tabs.len();
+            let name = if n <= 50 {
+                format!("{n}.square")
             } else {
-                sh.on = true;
-                v.setFrame(f);
-                set_corner(&v, radius);
-                spring(self.mtm, 0.25, move || v.setAlpha(1.0));
+                "square.on.square".into()
+            };
+            if let Some(c) = b.configuration() {
+                c.setImage(sym(&name).as_deref());
+                b.setConfiguration(Some(&c));
             }
         }
-        for sh in self.shapes.iter_mut().skip(rects.len()).filter(|s| s.on) {
-            sh.on = false;
-            let v = sh.view.clone();
-            spring(self.mtm, 0.2, move || v.setAlpha(0.0));
+        let Some(mb) = self.glass.button("menu") else { return };
+        let a = self.s.tab(self.s.active).cloned().unwrap_or_default();
+        let marked = self.s.bookmarks.iter().any(|b| b.url == a.url);
+        let web = a.url.starts_with("http");
+        let sig = format!("{back}{fwd}{marked}{}{}{web}", a.desktop, self.s.settings.blocker);
+        if sig == self.menu_sig && mb.menu().is_some() {
+            return;
         }
+        self.menu_sig = sig;
+        let mtm = self.mtm;
+        let item = |title: &str, icon: &str, msg: serde_json::Value, enabled: bool, on: bool| -> Retained<UIMenuElement> {
+            let blk = RcBlock::new(move |_a: NonNull<UIAction>| {
+                let m = msg.clone();
+                with(|b| b.on_chrome(&m));
+            });
+            let act = unsafe {
+                UIAction::actionWithTitle_image_identifier_handler(&ns(title), sym(icon).as_deref(), None, RcBlock::as_ptr(&blk), mtm)
+            };
+            if !enabled {
+                act.setAttributes(UIMenuElementAttributes::Disabled);
+            }
+            if on {
+                act.setState(UIMenuElementState::On);
+            }
+            Retained::into_super(act)
+        };
+        let nav = [
+            item("Back", "chevron.backward", json!({"t":"back"}), back, false),
+            item("Forward", "chevron.forward", json!({"t":"fwd"}), fwd, false),
+            item("Reload", "arrow.clockwise", json!({"t":"reload"}), web, false),
+        ];
+        let page = [
+            item(
+                if marked { "Remove Bookmark" } else { "Add Bookmark" },
+                if marked { "star.slash" } else { "star" },
+                json!({"t":"bookmark"}),
+                web,
+                false,
+            ),
+            item("Copy Link", "doc.on.doc", json!({"t":"copy"}), web, false),
+            item(
+                if a.desktop {
+                    "Request Mobile Website"
+                } else {
+                    "Request Desktop Website"
+                },
+                if a.desktop { "iphone" } else { "desktopcomputer" },
+                json!({"t":"desktop"}),
+                web,
+                false,
+            ),
+        ];
+        let app = [
+            item("New Tab", "plus.square.on.square", json!({"t":"new"}), true, false),
+            item(
+                "Block Ads & Trackers",
+                "shield.lefthalf.filled",
+                json!({"t":"set","k":"blocker","v":!self.s.settings.blocker}),
+                true,
+                self.s.settings.blocker,
+            ),
+            item("Settings", "gearshape", json!({"t":"ui","js":"open('set')"}), true, false),
+        ];
+        let group = |els: &[Retained<UIMenuElement>]| -> Retained<UIMenuElement> {
+            let arr = NSArray::from_retained_slice(els);
+            let m = UIMenu::menuWithTitle_image_identifier_options_children(&ns(""), None, None, UIMenuOptions::DisplayInline, &arr, mtm);
+            Retained::into_super(m)
+        };
+        let all = NSArray::from_retained_slice(&[group(&nav), group(&page), group(&app)]);
+        let menu = UIMenu::menuWithTitle_children(&ns(""), &all, mtm);
+        mb.setMenu(Some(&menu));
+    }
+
+    /// Place the glass shapes the interface asked for (see glass.rs).
+    fn set_shapes(&mut self, specs: Vec<Spec>, hot: Vec<CGRect>) {
+        self.hot_bar = hot;
+        self.set_hot();
+        let mtm = self.mtm;
+        self.glass.sync(&specs, &move |kind| make_button(mtm, kind));
+        self.menu_sig.clear();
+        let (back, fwd) = match self.views.get(&self.s.active) {
+            Some(v) => unsafe { (v.canGoBack(), v.canGoForward()) },
+            None => (false, false),
+        };
+        self.update_buttons(back, fwd);
     }
 
     /// Open or close a sheet. Sheets that want it get a full-screen blur, which fades in and out.
     fn set_full(&mut self, full: bool, blur: bool) {
         self.full = full;
         self.blur = blur;
-        let area = if full {
-            self.root.bounds()
-        } else {
-            self.hot_bar.unwrap_or_else(|| self.bar_rect())
-        };
-        self.pass.ivars().hot.set(area);
+        self.set_hot();
         let target = if full && blur && self.s.settings.glass { 1.0 } else { 0.0 };
         let effect = self.effect.clone();
-        spring(self.mtm, if full { 0.3 } else { 0.22 }, move || effect.setAlpha(target));
+        spring(self.mtm, if full { 0.3 } else { 0.22 }, move || effect.setAlpha(target), None);
     }
 
     fn apply_theme(&self) {
@@ -275,7 +320,10 @@ impl Browser {
             Some(v) => unsafe { (v.canGoBack(), v.canGoForward()) },
             None => (false, false),
         };
-        let st = self.s.view_state(back, fwd).to_string();
+        self.update_buttons(back, fwd);
+        let mut v = self.s.view_state(back, fwd);
+        v["native"] = json!(self.native());
+        let st = v.to_string();
         if st == self.last_push {
             return;
         }
@@ -457,26 +505,41 @@ impl Browser {
             }
             "mode" => self.set_full(m["full"].as_bool().unwrap_or(false), m["blur"].as_bool().unwrap_or(true)),
             "shapes" => {
-                let nums = |v: &serde_json::Value| -> Vec<f64> {
-                    v.as_array()
-                        .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect())
-                        .unwrap_or_default()
-                };
-                let rects: Vec<[f64; 5]> = m["r"]
+                let f = |v: &serde_json::Value, k: &str| v[k].as_f64().unwrap_or(0.0);
+                let st = |v: &serde_json::Value, k: &str| v[k].as_str().filter(|x| !x.is_empty()).map(String::from);
+                let specs: Vec<Spec> = m["r"]
                     .as_array()
                     .map(|a| {
                         a.iter()
-                            .map(nums)
-                            .filter(|r| r.len() == 5)
-                            .map(|r| [r[0], r[1], r[2], r[3], r[4]])
-                            .take(16)
+                            .take(24)
+                            .filter_map(|r| {
+                                Some(Spec {
+                                    key: st(r, "k")?,
+                                    frame: rect(f(r, "x"), f(r, "y"), f(r, "w"), f(r, "h")),
+                                    radius: f(r, "r"),
+                                    from: st(r, "from"),
+                                    button: st(r, "btn").filter(|b| matches!(b.as_str(), "back" | "tabs" | "menu")),
+                                })
+                            })
                             .collect()
                     })
                     .unwrap_or_default();
-                let h = nums(&m["hot"]);
-                let hot = (h.len() == 4).then(|| rect(h[0], h[1], h[2], h[3]));
-                self.set_shapes(&rects, hot);
+                let hot: Vec<CGRect> = m["hot"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|h| {
+                                let n: Vec<f64> = h.as_array()?.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect();
+                                (n.len() == 4).then(|| rect(n[0], n[1], n[2], n[3]))
+                            })
+                            .take(8)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                self.set_shapes(specs, hot);
             }
+            // Run a bit of the interface's own script (from native buttons and menu items).
+            "ui" => self.chrome_js(&s("js")),
             "bookmark" => {
                 self.s.toggle_bookmark();
                 self.layout();
@@ -708,9 +771,44 @@ define_class!(
     }
 );
 
+fn sym(name: &str) -> Option<Retained<UIImage>> {
+    UIImage::systemImageNamed(&ns(name))
+}
+
+/// A native Liquid Glass button for the bar.
+fn make_button(mtm: MainThreadMarker, kind: &str) -> Retained<UIButton> {
+    let cfg = UIButtonConfiguration::glassButtonConfiguration(mtm);
+    let icon = match kind {
+        "back" => "chevron.backward",
+        "tabs" => "square.on.square",
+        _ => "ellipsis",
+    };
+    cfg.setImage(sym(icon).as_deref());
+    cfg.setBaseForegroundColor(Some(&UIColor::labelColor()));
+    let b = UIButton::buttonWithConfiguration_primaryAction(&cfg, None);
+    let msg = match kind {
+        "back" => Some(json!({"t":"back"})),
+        "tabs" => Some(json!({"t":"ui","js":"open('tabs')"})),
+        _ => None,
+    };
+    match msg {
+        Some(m) => {
+            let blk = RcBlock::new(move |_a: NonNull<UIAction>| {
+                let m = m.clone();
+                with(|b| b.on_chrome(&m));
+            });
+            let act = unsafe { UIAction::actionWithHandler(RcBlock::as_ptr(&blk), mtm) };
+            b.addAction_forControlEvents(&act, UIControlEvents::PrimaryActionTriggered);
+        }
+        // ⋯ opens its menu straight away; on iOS 26 it morphs out of the button.
+        None => b.setShowsMenuAsPrimaryAction(true),
+    }
+    b
+}
+
 pub struct PassIvars {
     /// Where the interface takes touches (the bar, or everything while a sheet is open).
-    hot: Cell<CGRect>,
+    hot: RefCell<Vec<CGRect>>,
 }
 
 define_class!(
@@ -727,8 +825,9 @@ define_class!(
         /// Touches outside the hot area fall through to the page underneath.
         #[unsafe(method(hitTest:withEvent:))]
         fn hit_test(&self, p: CGPoint, ev: *mut AnyObject) -> *mut UIView {
-            let r = self.ivars().hot.get();
-            let inside = p.x >= r.origin.x && p.x < r.origin.x + r.size.width && p.y >= r.origin.y && p.y < r.origin.y + r.size.height;
+            let inside = self.ivars().hot.borrow().iter().any(|r| {
+                p.x >= r.origin.x && p.x < r.origin.x + r.size.width && p.y >= r.origin.y && p.y < r.origin.y + r.size.height
+            });
             if !inside {
                 return std::ptr::null_mut();
             }
@@ -740,7 +839,9 @@ define_class!(
 impl PassView {
     fn new(mtm: MainThreadMarker, frame: CGRect) -> Retained<Self> {
         let this: Allocated<Self> = Self::alloc(mtm);
-        let this = this.set_ivars(PassIvars { hot: Cell::new(frame) });
+        let this = this.set_ivars(PassIvars {
+            hot: RefCell::new(vec![frame]),
+        });
         unsafe { msg_send![super(this), initWithFrame: frame] }
     }
 }
@@ -850,6 +951,7 @@ fn start(mtm: MainThreadMarker) {
     }
     pass.addSubview(&chrome);
     root.addSubview(&pass);
+    let glass = Glass::new(mtm, &root, &pass);
 
     let path = format!("{}/Documents/wisp.json", NSHomeDirectory());
     let s = Session::load(&std::fs::read_to_string(&path).unwrap_or_default());
@@ -870,8 +972,9 @@ fn start(mtm: MainThreadMarker) {
         path,
         last_push: String::new(),
         shown: 0,
-        shapes: vec![],
-        hot_bar: None,
+        glass,
+        hot_bar: vec![],
+        menu_sig: String::new(),
         blur: false,
     };
     B.with(|cell| *cell.borrow_mut() = Some(b));

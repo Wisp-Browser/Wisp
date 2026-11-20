@@ -33,6 +33,8 @@ body.top:not(.flat) #bar{top:calc(env(safe-area-inset-top) + 2px);bottom:auto;he
 body:not(.flat) #bar .ib{width:50px;height:50px;border-radius:25px}
 body:not(.flat) #addr{height:50px;border-radius:25px;background:transparent}
 body:not(.flat) #bar .ib:active,body:not(.flat) #addr:active{background:var(--fill)}
+/* iOS 26: back, tabs and ⋯ are native Liquid Glass buttons drawn by iOS in these places. */
+body.native #bar [data-btn]{visibility:hidden}
 #prog{position:absolute;left:14px;right:14px;bottom:2px;height:2.5px;border-radius:2px;background:var(--accent);transform-origin:left;transform:scaleX(0);opacity:0;transition:transform .4s var(--ease),opacity .25s}
 body.loading #prog{opacity:1;transform:scaleX(.85);transition:transform 6s cubic-bezier(.1,.6,.2,1),opacity .15s}
 body.done #prog{opacity:0;transform:scaleX(1);transition:transform .2s var(--ease),opacity .3s .15s}
@@ -157,15 +159,15 @@ body:not(.flat) #menu.on .mbot>*{animation:in .3s var(--spring)}
 </style></head><body>
 
 <div id="bar">
- <button class="ib g" id="back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
- <label id="addr" class="g"><div id="prog"></div><svg class="lock" viewBox="0 0 24 24" id="lock"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+ <button class="ib g" id="back" data-k="back" data-btn="back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+ <label id="addr" class="g" data-k="addr"><div id="prog"></div><svg class="lock" viewBox="0 0 24 24" id="lock"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
   <input id="url" type="text" readonly placeholder="Search or enter address" aria-label="Address">
   <button class="ib" id="rl" aria-label="Reload"><svg viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button></label>
- <button class="ib g" id="tabsb" aria-label="Tabs"><span id="count">1</span></button>
- <button class="ib g" id="moreb" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/></svg></button>
+ <button class="ib g" id="tabsb" data-k="tabs" data-btn="tabs" aria-label="Tabs"><span id="count">1</span></button>
+ <button class="ib g" id="moreb" data-k="menu" data-btn="menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/></svg></button>
 </div>
 
-<div id="bm" class="g" aria-label="Bookmarks"></div>
+<div id="bm" class="g" data-k="bm" aria-label="Bookmarks"></div>
 
 <div class="sheet" id="search">
  <div class="top"><div id="sbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
@@ -182,7 +184,7 @@ body:not(.flat) #menu.on .mbot>*{animation:in .3s var(--spring)}
 
 <div class="sheet" id="menu">
  <div class="top"><span style="width:64px"></span><h2>Wisp</h2><button class="txt r" data-close>Done</button></div>
- <div class="mbot g">
+ <div class="mbot g" data-k="menupanel" data-from="menu">
   <div class="navrow">
    <button id="mback"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Back</button>
    <button id="mfwd"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>Forward</button>
@@ -250,15 +252,19 @@ function close(){if(!sheet)return;const el=$('#'+sheet);sheet='';$('#q').blur();
 // plus the bar's box so Rust knows where the bar takes touches.
 const lbox=el=>{let x=0,y=0,e=el;while(e){x+=e.offsetLeft;y+=e.offsetTop;e=e.offsetParent}return{x,y,w:el.offsetWidth,h:el.offsetHeight}};
 let shSig='',shRaf=0;
-function shapes(){if(shRaf)return;shRaf=requestAnimationFrame(()=>{shRaf=0;const b=document.body.classList,r=[];
+function shapes(){if(shRaf)return;shRaf=requestAnimationFrame(()=>{shRaf=0;const b=document.body.classList,r=[],nat=b.contains('native');
  if(!b.contains('flat'))document.querySelectorAll('.g').forEach(el=>{
   if(!el.offsetWidth||!el.getClientRects().length)return;
   const inBar=!!el.closest('#bar'),sh=el.closest('.sheet');
   if((inBar||el.id==='bm')&&b.contains('full'))return;if(sh&&!sh.classList.contains('on'))return;
-  const q=lbox(el);r.push([q.x,q.y,q.w,q.h,parseFloat(getComputedStyle(el).borderTopLeftRadius)||0])});
- let hb=lbox($('#bar'));const bm=$('#bm');
- if(b.contains('hasbm')&&bm.offsetWidth){const q=lbox(bm),x=Math.min(hb.x,q.x),y=Math.min(hb.y,q.y);hb={x,y,w:Math.max(hb.x+hb.w,q.x+q.w)-x,h:Math.max(hb.y+hb.h,q.y+q.h)-y}}
- const msg={t:'shapes',r,hot:[hb.x,hb.y,hb.w,hb.h]},sig=JSON.stringify(msg);
+  const q=lbox(el);r.push({k:el.dataset.k,x:q.x,y:q.y,w:q.w,h:q.h,r:parseFloat(getComputedStyle(el).borderTopLeftRadius)||0,
+   from:el.dataset.from||'',btn:nat&&el.dataset.btn||''})});
+ // Touch areas for the interface. Native glass buttons take their own touches.
+ const box=el=>{const q=lbox(el);return[q.x,q.y,q.w,q.h]},bm=$('#bm'),hasBm=b.contains('hasbm')&&bm.offsetWidth;
+ let hot;
+ if(nat){hot=[box($('#addr'))];if(hasBm)hot.push(box(bm))}
+ else{let hb=lbox($('#bar'));if(hasBm){const q=lbox(bm),x=Math.min(hb.x,q.x),y=Math.min(hb.y,q.y);hb={x,y,w:Math.max(hb.x+hb.w,q.x+q.w)-x,h:Math.max(hb.y+hb.h,q.y+q.h)-y}}hot=[[hb.x,hb.y,hb.w,hb.h]]}
+ const msg={t:'shapes',r,hot},sig=JSON.stringify(msg);
  if(sig!==shSig){shSig=sig;send(msg)}})}
 addEventListener('resize',shapes);
 document.querySelectorAll('[data-close]').forEach(x=>x.onclick=close);
@@ -319,7 +325,7 @@ const WALLS=[['','Wisp','radial-gradient(120% 80% at 15% 0%,#3b2a7a,transparent 
  ['linear-gradient(160deg,#3a1c71,#d76d77,#ffaf7b)','Sunset'],['#0c0c0f','Black'],['linear-gradient(160deg,#e0eafc,#cfdef3)','Mist'],['linear-gradient(160deg,#ffecd2,#fcb69f)','Peach'],['linear-gradient(160deg,#fdfbfb,#e6e9ee)','Paper']];
 const FONTS=[['system','System','Apple’s SF Pro','-apple-system,system-ui'],['rounded','Rounded','Soft and friendly','ui-rounded,-apple-system'],['serif','Serif','Classic, like New York','ui-serif,Georgia,serif'],['mono','Mono','Monospaced','ui-monospace,Menlo,monospace']];
 const lum=h=>{const n=parseInt(h.slice(1),16),f=c=>{c/=255;return c<=.03928?c/12.92:((c+.055)/1.055)**2.4};return .2126*f(n>>16&255)+.7152*f(n>>8&255)+.0722*f(n&255)};
-function applyLook(){shapes();const c=S.set||{},b=document.body.classList;b.toggle('flat',c.glass===false);b.toggle('top',c.bar==='top');
+function applyLook(){shapes();const c=S.set||{},b=document.body.classList;b.toggle('native',!!S.native&&c.glass!==false);b.toggle('flat',c.glass===false);b.toggle('top',c.bar==='top');
  ['rounded','serif','mono'].forEach(f=>b.toggle('f-'+f,c.font===f));const r=document.documentElement.style;
  if(c.accent){r.setProperty('--accent',c.accent);r.setProperty('--accent-fg',lum(c.accent)>.45?'#111':'#fff')}}
 const segOf=(k,opts)=>`<div class="seg">${opts.map(([v,n])=>`<button data-k="${k}" data-v="${v}" class="${String(S.set[k])===String(v)?'on':''}">${n}</button>`).join('')}</div>`;

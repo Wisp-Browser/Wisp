@@ -13,6 +13,8 @@ mod core;
 #[cfg(target_os = "ios")]
 mod app;
 #[cfg(target_os = "ios")]
+mod glass;
+#[cfg(target_os = "ios")]
 mod wk;
 
 #[cfg(target_os = "ios")]
