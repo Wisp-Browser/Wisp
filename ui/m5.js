@@ -2,30 +2,25 @@
 (function(){
 const $=s=>document.querySelector(s),send=o=>window.ipc.postMessage(JSON.stringify(o));
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const I={
- shield:'<svg viewBox="0 0 16 16"><path d="M8 1.5l5.2 1.8v4.2c0 3.1-2.2 5.4-5.2 6.9C5 12.900 2.800 10.600 2.800 7.500V3.300z"/></svg>',
- star:'<svg viewBox="0 0 16 16"><path d="M8 1.800l1.900 3.900 4.300.6-3.100 3 .7 4.300L8 11.600 4.200 13.600l.7-4.300-3.100-3 4.300-.6z"/></svg>',
- dots:'<svg viewBox="0 0 16 16" class="fill"><circle cx="3.500" cy="8" r="1.300"/><circle cx="8" cy="8" r="1.300"/><circle cx="12.500" cy="8" r="1.300"/></svg>',
- up:'<svg viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg>',down:'<svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>',
- x:'<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
- search:'<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.200"/><path d="M10.200 10.200L13.500 13.500"/></svg>',
- clock:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.500"/><path d="M8 4.800V8l2.200 1.400"/></svg>',
- tab:'<svg viewBox="0 0 16 16"><rect x="2" y="3.500" width="12" height="9" rx="2"/><path d="M2 6.500h12"/></svg>',
- cmd:'<svg viewBox="0 0 16 16"><path d="M5 3a2 2 0 100 4h6a2 2 0 100-4 2 2 0 00-2 2v6a2 2 0 102-2H5a2 2 0 102 2V5a2 2 0 00-2-2z"/></svg>'};
+const I=new Proxy({},{get:(_,k)=>ico(k)});
 let S=null,booted=false;
 const ovs=new Set();
 function ov(){}
 const act=(t,x)=>send(Object.assign({t},x||{}));
 // Anything the chrome draws over the page area is reported as a "hole": the page window is cut
 // away there, so menus and dialogs appear on top of a page that stays put and stays visible.
-let holeSig='';
-function syncHoles(){requestAnimationFrame(()=>{const rects=[];
- [['#pop',0],['#sugg',0],['#palm',1],['#libm',1],['#setm',1],['#spmodal',1],['#ctx',0]].forEach(([sel,inner])=>{const e=$(sel);if(!e||!e.classList.contains('open'))return;
-  const el=inner?e.querySelector('.box'):e,r=el.getBoundingClientRect(),rad=parseFloat(getComputedStyle(el).borderTopLeftRadius)||14;if(r.width>0&&r.height>0)rects.push({x:Math.round(r.left),y:Math.round(r.top),w:Math.round(r.width),h:Math.round(r.height),r:rad})});
+// Rects come from layout boxes (offset*), which ignore the scale/slide-in transforms of open animations.
+let holeSig='',holeRaf=0;
+const HOLES=[['#pop',0],['#sugg',0],['#ctx',0],['#spm',0],['#findbar',0],['#palm',1],['#libm',1],['#setm',1],['#spmodal',1]];
+function lbox(el){let x=0,y=0,e=el;while(e){x+=e.offsetLeft;y+=e.offsetTop;e=e.offsetParent}return{x,y,w:el.offsetWidth,h:el.offsetHeight}}
+function syncHoles(){if(holeRaf)return;holeRaf=requestAnimationFrame(()=>{holeRaf=0;const rects=[];
+ const add=el=>{const b=lbox(el),rad=parseFloat(getComputedStyle(el).borderTopLeftRadius)||14;if(b.w>0&&b.h>0)rects.push({x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.w),h:Math.round(b.h),r:Math.min(rad,b.h/2)})};
+ HOLES.forEach(([sel,inner])=>{const e=$(sel);if(!e||!e.classList.contains('open'))return;add(inner?e.querySelector('.box'):e)});
+ document.querySelectorAll('#toasts .toast').forEach(add);
  const sig=JSON.stringify(rects);if(sig!==holeSig){holeSig=sig;send({t:'holes',rects})}})}
 function watchHoles(){const mo=new MutationObserver(syncHoles),ro=new ResizeObserver(syncHoles);
- ['#pop','#sugg','#palm','#libm','#setm','#spmodal'].forEach(sel=>{const e=$(sel);if(!e)return;mo.observe(e,{attributes:true,attributeFilter:['class','style']});ro.observe(e);const b=e.querySelector('.box');if(b)ro.observe(b)});
- addEventListener('resize',syncHoles)}
+ HOLES.forEach(([sel])=>{const e=$(sel);if(!e)return;mo.observe(e,{attributes:true,attributeFilter:['class','style']});ro.observe(e);const b=e.querySelector('.box');if(b)ro.observe(b)});
+ mo.observe($('#toasts'),{childList:true});addEventListener('resize',syncHoles)}
 const refreshInset=syncHoles,inset=()=>{};
 const cur=()=>S&&S.tabs.find(t=>t.id===S.active);
 
@@ -76,17 +71,6 @@ function toast(text){const box=$('#toasts');if(!box||!text)return;const t=docume
 
 // ---------- build static UI ----------
 function build(){
- const omni=$('#omni'),eng=$('#aibtn');
- const mk=(id,cls,html,title)=>{const b=document.createElement('button');b.id=id;b.className=cls;b.innerHTML=html;if(title)b.title=title;return b};
- eng.before(mk('zmchip','chip hidden','100%','Reset zoom'),mk('shbtn','ib2',I.shield+'<b id="shn"></b>','Ad & tracker blocker'),mk('bmbtn','ib2',I.star,'Bookmark this page (Ctrl+D)'));
- omni.after(mk('morebtn','nav',I.dots,'More'));
- $('#bar').insertAdjacentHTML('beforeend',`<div id="findbar" class="panel"><input id="fq" placeholder="Find in page" spellcheck="false"><span id="fcount"></span><button class="ib2" id="fprev">${I.up}</button><button class="ib2" id="fnext">${I.down}</button><button class="ib2" id="fx">${I.x}</button></div>`);
- document.body.insertAdjacentHTML('beforeend',`<div id="sugg" class="panel"></div><div id="pop" class="panel"></div>
-  <div class="veil" id="palm"><div class="box big panel"><input id="pq" placeholder="Type a command, tab, or address…" autocomplete="off"><div id="pr"></div></div></div>
-  <div class="veil" id="libm"><div class="box big panel xl"><div class="mh"><div class="seg" id="libtabs"></div><input id="libq" placeholder="Search"><button class="pbtn" id="libx">Close</button></div><div id="libbody"></div></div></div>
-  <div class="veil" id="setm"><div class="box big panel xl setbox"><nav id="setnav"></nav><div id="setbody"></div></div></div>`);
- $('#side').insertAdjacentHTML('beforeend','<div id="toasts"></div>');
- $('#title .brand').insertAdjacentHTML('beforeend','<em id="privbadge" class="hidden">Private</em>');
  $('#shbtn').onclick=e=>{e.stopPropagation();popover('shield')};$('#bmbtn').onclick=()=>act('bm_toggle');$('#morebtn').onclick=e=>{e.stopPropagation();popover('more')};
  $('#zmchip').onclick=()=>act('zoom',{d:0});
  $('#fq').oninput=()=>findNow('fresh');$('#fq').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();findStep(e.shiftKey?'prev':'next')}else if(e.key==='Escape')closeFind()};
@@ -96,13 +80,17 @@ function build(){
  // library + settings
  $('#libx').onclick=closeLib;$('#libm').onmousedown=e=>{if(e.target.id==='libm')closeLib()};$('#libq').oninput=()=>{lib.q=$('#libq').value;reqLib()};
  $('#setm').onmousedown=e=>{if(e.target.id==='setm')closeSettings()};
+ addEventListener('keydown',e=>{if(e.key!=='Escape'||capturing)return;if(popKind)closePop();else if($('#libm').classList.contains('open'))closeLib();else if($('#setm').classList.contains('open'))closeSettings()});
  addEventListener('click',e=>{if(!e.target.closest('#pop,#shbtn,#morebtn'))closePop();if(!e.target.closest('#sugg,#url'))closeSugg()});
  // suggestions on the address bar
  const u=$('#url');u.addEventListener('input',()=>requestSugg(),true);
  u.addEventListener('keydown',e=>{if(!sg.open)return;if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();e.stopImmediatePropagation();moveSugg(e.key==='ArrowDown'?1:-1)}
-  else if(e.key==='Enter'&&sg.sel>=0){e.preventDefault();e.stopImmediatePropagation();pickSugg(sg.items[sg.sel]);u.blur()}else if(e.key==='Escape'){closeSugg();u.blur()}},true);
+  else if(e.key==='Enter'&&sg.sel>=0){e.preventDefault();e.stopImmediatePropagation();pickSugg(sg.rows[sg.sel]);u.blur()}else if(e.key==='Escape'){closeSugg();u.blur()}},true);
  u.addEventListener('blur',()=>setTimeout(closeSugg,150));
  watchHoles();booted=true}
+// Popups that hang off a control follow it when the layout changes.
+function relayout(){if(!booted)return;if(sg.open)placeSugg();if(popKind){const k=popKind;popKind=null;popover(k)}syncHoles()}
+function placeSugg(){const r=$('#omni').getBoundingClientRect(),b=$('#sugg');b.style.left=Math.max(8,r.left-4)+'px';b.style.width=Math.max(320,r.width+8)+'px';b.style.top=(r.bottom+6)+'px'}
 
 // ---------- find in page ----------
 let finding=false;
@@ -121,7 +109,7 @@ function renderSugg(){const box=$('#sugg');const q=sg.q.trim();
  const seen=new Set();sg.rows=rows.filter(r=>{const k=r.k+'|'+(r.url||r.title);if(seen.has(k))return false;seen.add(k);return true}).slice(0,9);
  if(!q||!sg.rows.length){closeSugg();return}
  sg.items2=sg.rows;box.innerHTML=sg.rows.map((r,i)=>`<div class="sr ${i===sg.sel?'sel':''}" data-i="${i}"><i>${r.k==='tab'?I.tab:r.k==='search'?I.search:I.clock}</i><span>${esc(r.title)}</span><small>${esc(r.k==='search'?'Search':r.k==='tab'?'Switch to tab':r.url)}</small></div>`).join('');
- box.classList.add('open');sg.open=true;refreshInset();
+ placeSugg();box.classList.add('open');sg.open=true;refreshInset();
  box.querySelectorAll('.sr').forEach(el=>el.onmousedown=e=>{e.preventDefault();pickSugg(sg.rows[+el.dataset.i]);$('#url').blur()})}
 function moveSugg(d){const n=sg.rows.length;sg.sel=(sg.sel+d+n+1)%(n+1)-1;renderSugg();if(sg.sel>=0){const r=sg.rows[sg.sel];$('#url').value=r.url||r.title}}
 function pickSugg(r){if(!r)return;closeSugg();if(r.k==='tab')act('select',{id:r.id});else act('go',{input:r.url||r.title})}
@@ -129,16 +117,17 @@ function closeSugg(){if(!sg.open)return;sg.open=false;$('#sugg').classList.remov
 
 // ---------- popovers (shield + more) ----------
 let popKind=null;
+function anchor(p,btn){const r=$(btn).getBoundingClientRect();p.style.top=(r.bottom+8)+'px';p.style.right=Math.max(8,innerWidth-r.right)+'px';p.style.left='auto'}
+const MORE=[['find','search','Find in page'],['zoomin','zoomin','Zoom in'],['zoomout','zoomout','Zoom out'],['reader','reader','Reader mode'],['bookmark','star','Bookmark this page'],0,['bookmarks','bookmark','Bookmarks'],['history','history','History'],['downloads','download','Downloads'],0,['private','private','New private window'],['fullscreen','full','Full screen'],['print','print','Print…'],['theme','contrast','Light / dark theme'],0,['settings','settings','Settings']];
 function popover(kind){if(popKind===kind){closePop();return}popKind=kind;const p=$('#pop'),pg=(S&&S.page)||{};
  if(kind==='shield'){const f=S.filters||{};p.innerHTML=`<h4>${esc(pg.host||'This page')}</h4>
-  <div class="prow2"><span>Ad & tracker blocking<br><small>${S.s.blocker?(pg.site_off?'Off on this site':'On'):'Off everywhere (Settings)'}</small></span><button class="sw2 ${S.s.blocker&&!pg.site_off?'on':''}" id="pst" ${pg.host&&S.s.blocker?'':'disabled'}><i></i></button></div>
+  <div class="prow2"><span>Ad &amp; tracker blocking<br><small>${S.s.blocker?(pg.site_off?'Off on this site':'On'):'Off everywhere (Settings)'}</small></span><button class="sw2 ${S.s.blocker&&!pg.site_off?'on':''}" id="pst" role="switch" ${pg.host&&S.s.blocker?'':'disabled'}><i></i></button></div>
   <div class="stat"><b>${pg.blocked||0}</b> blocked on this page<br><b>${f.total||0}</b> this session · ${f.rules||0} filter rules</div>
   <button class="pbtn wide" id="psl">Blocker settings</button>`;
-  p.style.right=(innerWidth-($('#shbtn').getBoundingClientRect().right)-8+ (S.ai&&S.ai.open?0:0))+'px';
+  anchor(p,'#shbtn');
   setTimeout(()=>{$('#pst').onclick=()=>{closePop();act('site_blocker')};$('#psl').onclick=()=>{closePop();openSettings('privacy')}})}
- else{const items=[['find','Find in page'],['zoomin','Zoom in'],['zoomout','Zoom out'],['reader','Reader mode'],['bookmark','Bookmark this page'],['bookmarks','Bookmarks'],['history','History'],['downloads','Downloads'],['private','New private window'],['fullscreen','Fullscreen'],['print','Print…'],['settings','Settings']];
-  p.innerHTML='<div class="menu">'+items.map(([id,n])=>{const c=CMDS.find(x=>x.id===id);return `<button data-c="${id}"><span>${n}</span><small>${esc(c&&eff(c)?pretty(eff(c)):'')}</small></button>`}).join('')+'</div>';
-  p.style.right=(innerWidth-$('#morebtn').getBoundingClientRect().right)+'px';
+ else{p.innerHTML='<div class="menu">'+MORE.map(x=>{if(!x)return '<div class="msep"></div>';const c=CMDS.find(y=>y.id===x[0]);return `<button data-c="${x[0]}">${ico(x[1])}<span>${x[2]}</span><small>${esc(c&&eff(c)?pretty(eff(c)):'')}</small></button>`}).join('')+'</div>';
+  anchor(p,'#morebtn');
   setTimeout(()=>p.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{closePop();CMDS.find(x=>x.id===b.dataset.c).run()}))}
  p.classList.add('open');refreshInset()}
 function closePop(){if(!popKind)return;popKind=null;$('#pop').classList.remove('open');refreshInset()}
@@ -171,25 +160,60 @@ function renderLib(items){lib.items=items;const b=$('#libbody');
  const head=lib.tab==='history'?'<div class="lbar"><button class="pbtn" id="hclr">Clear all history</button></div>':lib.tab==='downloads'?'<div class="lbar"><button class="pbtn" id="dclr">Clear list</button></div>':'';
  if(!items.length){b.innerHTML=head+`<div class="none">${lib.tab==='bookmarks'?'No bookmarks yet. Press Ctrl+D on a page, or import them in Settings → Bookmarks.':lib.tab==='history'?'No history yet.':'No downloads yet.'}</div>`}
  else b.innerHTML=head+items.map((x,i)=>lib.tab==='downloads'
-  ?`<div class="lr"><div class="lt"><b>${esc(x.name)}</b><small>${x.state==='progress'?'Downloading…':x.state==='failed'?'Failed':'Saved · '+ago(x.ts)}</small></div>${x.state==='done'?`<button class="pbtn" data-o="${x.id}">Open</button><button class="pbtn" data-s="${x.id}">Show in folder</button>`:''}</div>`
-  :`<div class="lr go" data-u="${esc(x.url)}"><i>${lib.tab==='bookmarks'?I.star:I.clock}</i><div class="lt"><b>${esc(x.title||x.url)}</b><small>${esc(x.url)}</small></div>${x.folder?`<em>${esc(x.folder)}</em>`:''}${x.ts&&lib.tab==='history'?`<em>${ago(x.ts)}</em>`:''}<button class="ib2" data-d="${i}" title="Remove">${I.x}</button></div>`).join('');
+  ?`<div class="lr"><i>${I.file}</i><div class="lt"><b>${esc(x.name)}</b><small>${x.state==='progress'?'Downloading…':x.state==='failed'?'Failed':'Saved · '+ago(x.ts)}</small></div>${x.state==='done'?`<button class="pbtn" data-o="${x.id}">Open</button><button class="pbtn" data-s="${x.id}">Show in folder</button>`:''}</div>`
+  :`<div class="lr go" data-u="${esc(x.url)}"><i>${lib.tab==='bookmarks'?I.star:I.clock}</i><div class="lt"><b>${esc(x.title||x.url)}</b><small>${esc(x.url)}</small></div>${x.folder?`<em>${esc(x.folder)}</em>`:''}${x.ts&&lib.tab==='history'?`<em>${ago(x.ts)}</em>`:''}<button class="ib" data-d="${i}" title="Remove">${I.x}</button></div>`).join('');
  b.querySelectorAll('.lr.go').forEach(r=>r.onclick=e=>{if(e.target.closest('[data-d]'))return;closeLib();act('go',{input:r.dataset.u})});
  b.querySelectorAll('[data-d]').forEach(x=>x.onclick=()=>act(lib.tab==='bookmarks'?'bm_del':'hist_del',{url:lib.items[+x.dataset.d].url,q:lib.q}));
  b.querySelectorAll('[data-o]').forEach(x=>x.onclick=()=>act('dl_open',{id:+x.dataset.o}));b.querySelectorAll('[data-s]').forEach(x=>x.onclick=()=>act('dl_show',{id:+x.dataset.s}));
  const h=$('#hclr');if(h)h.onclick=()=>{act('clear',{what:['history']});setTimeout(reqLib,120)};const d=$('#dclr');if(d)d.onclick=()=>act('dl_clear')}
 
 // ---------- settings ----------
-let setSec='general',srcs=[],updMsg='';
+let setSec='general',srcs=[],updMsg='',setHtml='',setNavHtml='',setSecShown='';
 function openSettings(sec){if(sec)setSec=sec;$('#setm').classList.add('open');ov('set',true);if(setSec==='bookmarks')act('sources');renderSettings()}
-function closeSettings(){capturing=null;$('#setm').classList.remove('open');ov('set',false)}
+function closeSettings(){capturing=null;$('#setm').classList.remove('open');ov('set',false);setHtml='';setNavHtml=''}
+// ---------- appearance: shared by Settings and the first-run setup ----------
+const LAYS=[['classic','Classic','Tabs on top, address bar on a row below'],['compact','Compact','Tabs and address bar in one slim row'],['vertical','Vertical','Collapsible tab sidebar, slim toolbar on top']];
+const MINI={
+ classic:[['','left:8px;top:7px;width:24%;height:8px'],['ac','left:calc(12% + 2px);top:16px;width:8px;height:2px'],['','left:calc(24% + 12px);top:7px;width:20%;height:8px'],['','left:calc(44% + 16px);top:7px;width:20%;height:8px'],['om','left:8px;right:8px;top:21px;height:9px'],['pg','left:6px;right:6px;top:35px;bottom:6px']],
+ compact:[['om','left:8px;top:8px;width:34%;height:10px'],['','left:calc(34% + 14px);top:9px;width:17%;height:8px'],['ac','left:calc(42% + 10px);top:18px;width:8px;height:2px'],['','left:calc(51% + 18px);top:9px;width:17%;height:8px'],['','left:calc(68% + 22px);top:9px;width:14%;height:8px'],['pg','left:6px;right:6px;top:25px;bottom:6px']],
+ vertical:[['om','left:30%;width:46%;top:7px;height:8px'],['pn','left:6px;top:21px;width:24%;bottom:6px;border-radius:5px'],['','left:12px;top:27px;width:15%;height:6px'],['ac','left:9px;top:27px;width:2px;height:6px'],['','left:12px;top:37px;width:15%;height:6px'],['','left:12px;top:47px;width:11%;height:6px'],['pg','left:calc(24% + 12px);top:21px;right:6px;bottom:6px']],
+ glass:[['pn','left:6px;right:6px;top:6px;height:14px;border-radius:7px'],['pn','left:6px;top:26px;width:28%;bottom:6px;border-radius:6px'],['pn','left:calc(28% + 12px);top:26px;right:6px;bottom:6px;border-radius:6px']]};
+const mini=(k,cls)=>`<div class="mini ${cls||''}">${MINI[k].map(([c,st])=>`<i class="${c}" style="${st}"></i>`).join('')}</div>`;
+const layNow=()=>(S&&S.layout)||'classic',glassOk=()=>!!(S&&S.glass_ok),glassNow=()=>!!(S&&S.glass_on&&S.glass_ok);
+const themeSeg=()=>[[0,'Dark'],[1,'Light']].map(([v,n])=>`<button data-theme="${v}" class="${!!(S&&S.light)===!!v?'on':''}">${n}</button>`).join('');
+const layCards=()=>LAYS.map(([k,n,d])=>`<button class="pv ${layNow()===k?'on':''}" data-lay="${k}" aria-pressed="${layNow()===k}">${mini(k)}<b>${ico('check')}${n}</b><small>${d}</small></button>`).join('');
+const glassCards=()=>`<button class="pv ${glassNow()?'on':''}" data-glass="1" ${glassOk()?'':'disabled'} aria-pressed="${glassNow()}">${mini('glass','glassy')}<b>${ico('check')}Glass</b><small>Frosted, see-through surfaces with soft depth</small></button>
+ <button class="pv ${glassNow()?'':'on'}" data-glass="0" aria-pressed="${!glassNow()}">${mini('glass','flatty')}<b>${ico('check')}Flat</b><small>Solid surfaces, no blur or transparency</small></button>`;
+const glassNote=()=>glassOk()?'':`<div class="note">${ico('info')}<span>This version of Windows (or its “Transparency effects” setting) doesn’t support window blur, so Wisp uses Flat. Glass turns on by itself when it becomes available.</span></div>`;
+function wireLook(root){
+ root.querySelectorAll('[data-lay]').forEach(x=>x.onclick=()=>{if(layNow()!==x.dataset.lay)act('set',{k:'layout',v:x.dataset.lay})});
+ root.querySelectorAll('[data-glass]').forEach(x=>x.onclick=()=>act('set',{k:'glass_on',v:x.dataset.glass==='1'}));
+ root.querySelectorAll('[data-theme]').forEach(x=>x.onclick=()=>{if(!!S.light!==(x.dataset.theme==='1'))act('theme')})}
+// ---------- first-run setup ----------
+const su={open:false,step:0,shown:-1,done:false};
+function openSetup(){su.open=true;su.step=0;su.shown=-1;$('#setup').classList.add('open');act('overlay',{who:'setup',open:true});renderSetup()}
+function finishSetup(){su.open=false;su.done=true;$('#setup').classList.remove('open');act('set',{k:'setup_done',v:true});act('overlay',{who:'setup',open:false})}
+function renderSetup(){if(!su.open)return;const b=$('#setupbox');let h='';
+ if(su.step===0)h=`<div class="su-h"><img src="/logo.svg" alt=""><h2>Welcome to Wisp</h2><p>Let’s set up how Wisp looks. You can change any of this later in Settings → Appearance.</p></div><div class="su-seg"><div class="seg">${themeSeg()}</div></div>`;
+ if(su.step===1)h=`<div class="su-h"><h2>Choose a layout</h2><p>Every layout has the same features, just arranged differently.</p></div><div class="pvs">${layCards()}</div>`;
+ if(su.step===2)h=`<div class="su-h"><h2>Glass effects</h2><p>Frosted, see-through surfaces, or solid and flat. Everything else stays the same.</p></div><div class="pvs">${glassCards()}</div>${glassNote()}`;
+ const anim=su.shown!==su.step;su.shown=su.step;
+ b.innerHTML=`<div class="${anim?'su-body':''}">${h}</div><div class="su-f"><div class="su-dots">${[0,1,2].map(i=>`<i class="${i===su.step?'on':''}"></i>`).join('')}</div>${su.step?'<button class="pbtn" id="suback">Back</button>':''}<button class="pbtn go" id="sunext">${su.step<2?'Continue':'Start browsing'}</button></div>`;
+ wireLook(b);$('#sunext').onclick=()=>{if(su.step<2){su.step++;renderSetup()}else finishSetup()};const bk=$('#suback');if(bk)bk.onclick=()=>{su.step--;renderSetup()};
+ if(anim)$('#sunext').focus()}
 const tg=(on,k)=>`<button class="sw2 ${on?'on':''}" data-set="${k}" role="switch"><i></i></button>`;
 const row=(t,sub,ctl)=>`<div class="srow"><span>${t}${sub?`<small>${sub}</small>`:''}</span>${ctl||''}</div>`;
-function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;const s=S.s,secs=[['general','General'],['privacy','Privacy & security'],['tabs','Tabs'],['shortcuts','Shortcuts'],['bookmarks','Bookmarks'],['updates','Updates'],['about','About']];
- $('#setnav').innerHTML='<h3>Settings</h3>'+secs.map(([k,n])=>`<button data-sec="${k}" class="${setSec===k?'on':''}">${n}</button>`).join('')+'<button class="pbtn" id="setx">Close</button>';
+function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;const s=S.s,secs=[['general','General','globe'],['appearance','Appearance','palette'],['privacy','Privacy & security','shield'],['tabs','Tabs','tab'],['shortcuts','Shortcuts','cmd'],['bookmarks','Bookmarks','bookmark'],['updates','Updates','download'],['about','About','info']];
+ const nav='<h3>Settings</h3>'+secs.map(([k,n,ic])=>`<button data-sec="${k}" class="${setSec===k?'on':''}">${ico(ic)}${n}</button>`).join('')+'<button class="pbtn" id="setx">Close</button>';
  let h='';
  if(setSec==='general')h=`<h2>General</h2>${row('Default search engine','Used by the address bar. Type a prefix like “d cats” to use another engine once.',`<div class="seg">${S.engines.map(e=>`<button data-eng="${e.id}" class="${S.engine===e.id?'on':''}">${esc(e.name)}</button>`).join('')}</div>`)}
   ${row('Search suggestions','Sends what you type in the address bar to your search engine to get suggestions.',tg(s.suggest,'suggest'))}
-  ${row('Appearance','Wallpaper, widgets, accent colour and glass live in Customize on the new tab page.',`<button class="pbtn" data-act="theme">Light / Dark</button>`)}`;
+  ${row('Appearance','Theme, layout and glass effects.',`<button class="pbtn" data-sec="appearance">Open</button>`)}`;
+ if(setSec==='appearance')h=`<h2>Appearance</h2>
+  <h5>Theme</h5><div class="seg" style="display:inline-flex">${themeSeg()}</div>
+  <h5>Layout</h5><div class="pvs">${layCards()}</div>
+  <h5>Glass effects</h5><div class="pvs">${glassCards()}</div>${glassNote()}
+  <h5>Wallpaper</h5>${row('Wallpaper, accent colour and widgets','Set these in Customize on the New Tab page. They are saved per space.',`<button class="pbtn" data-act="newtab">Open a New Tab</button>`)}`;
  if(setSec==='privacy')h=`<h2>Privacy & security</h2>
   ${row('Ad & tracker blocker','Blocks ad and tracking requests using filter lists, and hides common ad boxes.',tg(s.blocker,'blocker'))}
   ${row('Filter lists',`${(S.filters&&S.filters.rules)||0} rules loaded · ${(S.filters&&S.filters.total)||0} requests blocked this session`,'<button class="pbtn" data-act="filters">Update lists</button>')}
@@ -208,8 +232,9 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
   ${row('Update automatically','Checks every few hours, downloads in the background, and installs when you restart. It never interrupts your work.',tg(s.auto_update,'auto_update'))}
   ${row('Release channel','Beta gets new features first.',`<div class="seg">${['stable','beta'].map(c=>`<button data-ch="${c}" class="${s.channel===c?'on':''}">${c[0].toUpperCase()+c.slice(1)}</button>`).join('')}</div>`)}`;
  if(setSec==='about')h=`<h2>About Wisp</h2><div class="about"><img src="/logo.svg" alt=""><div><b>Wisp ${esc(S.version)}</b><small>A light, glassy browser built on WebView2.</small></div></div>${row('Source code','github.com/jakedev2/Wisp','<button class="pbtn" data-open="https://github.com/jakedev2/Wisp">Open</button>')}`;
- $('#setbody').innerHTML=h;
- const b=$('#setm');b.querySelectorAll('[data-sec]').forEach(x=>x.onclick=()=>{setSec=x.dataset.sec;capturing=null;if(setSec==='bookmarks')act('sources');renderSettings()});
+ const body=$('#setbody');if(nav!==setNavHtml){setNavHtml=nav;$('#setnav').innerHTML=nav}
+ if(h!==setHtml){const top=setSecShown===setSec?body.scrollTop:0;setHtml=h;body.innerHTML=h;body.scrollTop=top;setSecShown=setSec}
+ const b=$('#setm');wireLook(b);b.querySelectorAll('[data-sec]').forEach(x=>x.onclick=()=>{setSec=x.dataset.sec;capturing=null;if(setSec==='bookmarks')act('sources');renderSettings()});
  $('#setx').onclick=closeSettings;
  b.querySelectorAll('[data-set]').forEach(x=>x.onclick=()=>{act('set',{k:x.dataset.set,v:!s[x.dataset.set]})});
  b.querySelectorAll('[data-eng]').forEach(x=>x.onclick=()=>act('engine',{id:x.dataset.eng}));
@@ -225,14 +250,16 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
   else if(a==='upd'){updMsg='Checking…';renderSettings();act('upd_check')}else if(a==='restart')act('update_apply')
   else if(a==='clear'){const w=[];if($('#c_h').checked)w.push('history');if($('#c_c').checked)w.push('cookies');if(w.length)act('clear',{what:w})}
   else if(a==='resetkeys'){S.s.shortcuts={};act('set',{k:'shortcuts',v:{}});pushCombos();renderSettings()}
-  else if(a==='openbm'){closeSettings();openLib('bookmarks')}})}
+  else if(a==='openbm'){closeSettings();openLib('bookmarks')}
+  else if(a==='newtab'){closeSettings();act('new')}})}
 
 // ---------- state + events ----------
 function state(s){S=s;if(!booted)build();
  document.body.classList.toggle('private',!!s.private);$('#privbadge').classList.toggle('hidden',!s.private);
  const pg=s.page||{};$('#bmbtn').classList.toggle('on',!!pg.bm);const n=pg.blocked||0,sh=$('#shn');sh.textContent=n>99?'99+':n||'';$('#shbtn').classList.toggle('active',!!n);$('#shbtn').classList.toggle('off',!s.s.blocker||!!pg.site_off);
  const z=$('#zmchip');z.classList.toggle('hidden',!pg.zoom||pg.zoom===1);z.textContent=Math.round((pg.zoom||1)*100)+'%';
- pushCombos();if($('#setm').classList.contains('open')&&!capturing)renderSettings()}
+ pushCombos();if($('#setm').classList.contains('open')&&!capturing)renderSettings();
+ if(s.setup&&!s.private&&!su.open&&!su.done)openSetup();else if(su.open)renderSetup()}
 function event(e){switch(e.type){
  case'toast':toast(e.text);break;
  case'lib':if(e.what===lib.tab)renderLib(e.items);break;
@@ -242,7 +269,7 @@ function event(e){switch(e.type){
  case'sources':srcs=e.items;if(setSec==='bookmarks')renderSettings();break;
  case'upd':updMsg=e.msg;renderSettings();if(!$('#setm').classList.contains('open'))toast(e.msg);break;
  case'update_ready':updMsg='Version '+e.version+' is ready.';stickyToast('Update '+e.version+' ready',"Restart",()=>act('update_apply'));renderSettings();break;
- case'pageclick':closePop();closeSugg();if($('#palm').classList.contains('open'))palette(false);if($('#libm').classList.contains('open'))closeLib();if($('#setm').classList.contains('open')&&!capturing)closeSettings();if($('#spmodal')&&$('#spmodal').classList.contains('open'))$('#spmodal').classList.remove('open');break;
+ case'pageclick':closePop();closeSugg();if($('#palm').classList.contains('open'))palette(false);if($('#libm').classList.contains('open'))closeLib();if($('#setm').classList.contains('open')&&!capturing)closeSettings();if($('#spmodal')&&$('#spmodal').classList.contains('open'))$('#spmodal').classList.remove('open');$('#ctx').classList.remove('open');$('#spm').classList.remove('open');break;
  case'imported':if($('#libm').classList.contains('open'))reqLib();break}}
-window.M5={inset,state,event,key:c=>{if(c==='escape'&&S&&S.fullscreen){act('fullscreen');return}runCombo(c)},palette:()=>palette(true)};
+window.M5={inset,state,event,relayout,openSettings,key:c=>{if(c==='escape'&&S&&S.fullscreen){act('fullscreen');return}runCombo(c)},palette:()=>palette(true)};
 })();

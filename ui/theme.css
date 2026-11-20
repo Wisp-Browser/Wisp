@@ -1,0 +1,99 @@
+/* Wisp design tokens. Glass and Flat share every token name; switching style or theme only swaps values.
+   body classes: .glass | .flat   ×   (default dark) | .light */
+:root{
+ --accent:#5e5ce6;--accent-fg:#fff;
+ --font:system-ui,"Segoe UI Variable Text","Segoe UI",sans-serif;
+ --mono:"Cascadia Code",Consolas,monospace;
+ --r-xs:6px;--r-sm:8px;--r:12px;--r-lg:16px;--r-xl:20px;--pill:999px;
+ --dur:160ms;--dur-s:110ms;--dur-l:200ms;--ease:cubic-bezier(.16,.84,.44,1);
+ --accent-soft:color-mix(in srgb,var(--accent) 20%,transparent);
+ --accent-line:color-mix(in srgb,var(--accent) 55%,transparent);
+ --focus:0 0 0 2px var(--accent);
+ color-scheme:dark;
+}
+/* ---- Dark · Glass (default) ---- */
+body{
+ --bg:#121218;            /* window base when no OS backdrop shows */
+ --frame:rgba(18,18,26,.38);/* tint over the OS backdrop / wallpaper behind the bars */
+ --surface:rgba(30,30,42,var(--sa,.7)); /* sidebar, cards (no blur: sits on the OS-blurred backdrop) */
+ --raised:rgba(255,255,255,.075);       /* omnibox, inputs, active tab */
+ --raised-2:rgba(255,255,255,.11);
+ --menu:rgba(30,30,42,.8);              /* popups: these get a GPU blur */
+ --veil:rgba(8,8,14,.38);
+ --hover:rgba(255,255,255,.07);--press:rgba(255,255,255,.12);
+ --line:rgba(255,255,255,.08);--line-2:rgba(255,255,255,.14);
+ --hi:rgba(255,255,255,.12);            /* 1px top highlight */
+ --fg:#f2f2f7;--fg2:rgba(242,242,247,.74);--fg3:rgba(242,242,247,.56);
+ --shadow:0 18px 48px rgba(0,0,0,.42),0 2px 8px rgba(0,0,0,.24);
+ --shadow-s:0 1px 3px rgba(0,0,0,.28);
+ --page:#17171f;
+ --blur:blur(24px) saturate(150%);
+ --danger:#ff6b6b;--ok:#3ccf8e;
+}
+body.light{
+ color-scheme:light;
+ --bg:#eef0f6;
+ --frame:rgba(246,247,252,.42);
+ --surface:rgba(255,255,255,var(--sa,.7));
+ --raised:rgba(255,255,255,.72);
+ --raised-2:rgba(255,255,255,.92);
+ --menu:rgba(252,252,255,.84);
+ --veil:rgba(30,32,48,.16);
+ --hover:rgba(20,20,40,.055);--press:rgba(20,20,40,.1);
+ --line:rgba(20,20,40,.09);--line-2:rgba(20,20,40,.16);
+ --hi:rgba(255,255,255,.75);
+ --fg:#16161d;--fg2:rgba(22,22,29,.74);--fg3:rgba(22,22,29,.6);
+ --shadow:0 18px 48px rgba(30,32,60,.18),0 2px 8px rgba(30,32,60,.1);
+ --shadow-s:0 1px 3px rgba(30,32,60,.12);
+ --page:#ffffff;
+ --danger:#d93838;--ok:#118a55;
+}
+/* ---- Flat: solid, opaque, no blur, minimal shadows ---- */
+body.flat{
+ --bg:#18181e;--frame:#18181e;--surface:#202028;--raised:#2a2a34;--raised-2:#32323e;--menu:#24242d;
+ --veil:rgba(0,0,0,.4);--hover:#2a2a33;--press:#33333e;--line:#2b2b35;--line-2:#3a3a46;--hi:transparent;
+ --shadow:0 6px 18px rgba(0,0,0,.3);--shadow-s:none;--blur:none;--page:#18181e;
+}
+body.flat.light{
+ --bg:#e9ebf1;--frame:#e9ebf1;--surface:#f6f7fa;--raised:#ffffff;--raised-2:#ffffff;--menu:#ffffff;
+ --veil:rgba(20,20,40,.18);--hover:#e2e4eb;--press:#d8dbe4;--line:#dadde5;--line-2:#c9ccd6;--hi:transparent;
+ --shadow:0 6px 18px rgba(30,32,60,.12);--shadow-s:none;--page:#ffffff;
+}
+body.perf{--blur:blur(6px)}
+body.flat.perf{--blur:none}
+
+/* ---- base ---- */
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:default;-webkit-tap-highlight-color:transparent}
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.i{width:16px;height:16px;flex:none;display:block}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track,*::-webkit-scrollbar-corner{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--fg3);border-width:2px;background-clip:padding-box}
+
+/* glass recipe: translucent fill + 1px light top edge. Only popups add the GPU blur. */
+.glass-s{background:var(--surface);border:1px solid var(--line);border-top-color:var(--hi)}
+.glass-m{background:var(--menu);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border:1px solid var(--line);border-top-color:var(--hi);box-shadow:var(--shadow)}
+
+/* switch */
+.sw2{width:38px;height:22px;border-radius:11px;border:1px solid var(--line-2);background:var(--raised);position:relative;flex:none;padding:0;transition:background-color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.sw2 i{position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--fg2);transition:transform var(--dur) var(--ease),background-color var(--dur) var(--ease);box-shadow:var(--shadow-s)}
+.sw2.on{background:var(--accent);border-color:transparent}.sw2.on i{transform:translateX(16px);background:#fff}
+.sw2:disabled{opacity:.4}
+/* segmented control */
+.seg{display:flex;gap:2px;padding:3px;border-radius:var(--r);background:var(--hover);flex-wrap:wrap}
+.seg button{height:28px;padding:0 12px;border:0;border-radius:9px;background:none;font-size:12.5px;color:var(--fg2);transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease)}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:var(--raised-2);color:var(--fg);box-shadow:var(--shadow-s)}
+body.flat .seg button.on{box-shadow:inset 0 0 0 1px var(--line-2)}
+
+@keyframes menuin{from{opacity:0;transform:scale(.97) translateY(-4px)}}
+@keyframes fadein{from{opacity:0}}
+@keyframes slideup{from{opacity:0;transform:translateY(8px)}}
+@media (prefers-reduced-motion:reduce){
+ *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;scroll-behavior:auto!important}
+}
+::view-transition-old(root),::view-transition-new(root){animation-duration:180ms;animation-timing-function:var(--ease)}

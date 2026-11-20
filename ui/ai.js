@@ -49,22 +49,22 @@ function md(src){return src.split(/(```[\s\S]*?(?:```|$))/g).map(p=>{
 
 // ---------- dropdowns ----------
 function closeMenus(){document.querySelectorAll('.ddm.open').forEach(m=>m.classList.remove('open'));if(isWeb())post({t:'ai_webhide',hide:false})}
-function dd(host,items,value,pick,empty){host.innerHTML='';const b=document.createElement('button');b.className='ddb';b.innerHTML='<span></span><i>▾</i>';
+function dd(host,items,value,pick,empty){host.innerHTML='';const b=document.createElement('button');b.className='ddb';b.innerHTML='<span></span>'+ico('chev');
  const cur=items.find(i=>i.id===value);b.firstChild.textContent=cur?cur.name:(value||empty||'Select…');
- const m=document.createElement('div');m.className='ddm panel';
+ const m=document.createElement('div');m.className='ddm glass-m';
  items.forEach(i=>{const o=document.createElement('button');o.textContent=i.name;o.title=i.name;if(i.id===value)o.className='on';o.onclick=e=>{e.stopPropagation();closeMenus();pick(i.id)};m.appendChild(o)});
  if(!items.length){const o=document.createElement('button');o.textContent=empty||'Nothing here yet';o.style.opacity='.6';m.appendChild(o)}
  b.onclick=e=>{e.stopPropagation();const was=m.classList.contains('open');closeMenus();if(!was){m.classList.add('open');if(isWeb())post({t:'ai_webhide',hide:true})}};host.append(b,m);return m}
 
 // ---------- build ----------
-function build(){const p=$('#aip');p.className='panel';
+function build(){const p=$('#aip');p.className='glass-s';
  p.innerHTML=`<div id="aiw"></div>
  <div class="ah"><div class="ar1"><span class="at"><img src="/logo.svg" alt="">Wisp AI</span><div class="ab">
-  <button class="ib" id="aih" title="Chat history">⟲</button><button class="ib" id="ain" title="New chat">＋</button><button class="ib" id="aix" title="Close (Ctrl+J)"><svg viewBox="0 0 10 10" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 2l6 6M8 2l-6 6"/></svg></button></div></div>
+  <button class="ib" id="aih" title="Chat history">${ico('history')}</button><button class="ib" id="ain" title="New chat">${ico('plus')}</button><button class="ib" id="aix" title="Close (Ctrl+J)">${ico('x')}</button></div></div>
   <div class="ar2"><div class="dd" id="aprov"></div><div class="dd" id="amod"></div></div></div>
  <div class="abody"><div id="amsgs"></div><div class="ahist" id="ahist"></div></div>
- <div class="afoot"><div class="aqs"><button class="q" id="qsum">Summarize page</button><button class="q" id="qask">Ask about page</button><button class="q" id="qtr">Translate ▾</button><button class="q" id="qtabs">All tabs</button></div>
-  <div class="comp"><textarea id="ain2" rows="1" placeholder="Ask anything…" spellcheck="true"></textarea><button class="send" id="asend" title="Send">➤</button></div></div>`;
+ <div class="afoot"><div class="aqs"><button class="q" id="qsum">Summarize page</button><button class="q" id="qask">Ask about page</button><button class="q" id="qtr">Translate${ico('chev')}</button><button class="q" id="qtabs">All tabs</button></div>
+  <div class="comp"><textarea id="ain2" rows="1" placeholder="Ask anything…" spellcheck="true"></textarea><button class="send" id="asend" title="Send">${ico('send')}</button></div></div>`;
  $('#aix').onclick=()=>post({t:'ai_panel',open:false});$('#ain').onclick=newChat;$('#aih').onclick=()=>{A.hist=!A.hist;renderHist()};
  $('#asend').onclick=()=>A.streaming?stop():submit();
  const ta=$('#ain2');ta.oninput=()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,130)+'px';A.draft=ta.value};
@@ -72,18 +72,18 @@ function build(){const p=$('#aip');p.className='panel';
  $('#qsum').onclick=()=>send('Summarize this page. Start with a one-sentence TL;DR, then key points.','page');
  $('#qask').onclick=()=>{A.cfg.ctx=A.cfg.ctx==='page'?'none':'page';saveCfg();renderFoot();ta.focus()};
  $('#qtabs').onclick=()=>{A.cfg.ctx=A.cfg.ctx==='tabs'?'none':'tabs';saveCfg();renderFoot();ta.focus()};
- $('#qtr').onclick=e=>{e.stopPropagation();const m=document.createElement('div');m.className='ddm panel open';m.style.cssText='bottom:32px;top:auto;left:0;min-width:150px;position:absolute';
+ $('#qtr').onclick=e=>{e.stopPropagation();const m=document.createElement('div');m.className='ddm glass-m open';m.style.cssText='bottom:32px;top:auto;left:0;min-width:150px;position:absolute';
   LANGS.forEach(l=>{const o=document.createElement('button');o.textContent=l;if(l===A.cfg.lang)o.className='on';o.onclick=ev=>{ev.stopPropagation();A.cfg.lang=l;saveCfg();m.remove();send(`Translate to ${l}. Preserve meaning and formatting.`,'sel_or_page')};m.appendChild(o)});
   const old=$('#qtr .ddm');if(old){old.remove();return}$('#qtr').appendChild(m)};
  const h=$('#aiw');let drag=false;h.onpointerdown=e=>{drag=true;h.setPointerCapture(e.pointerId);h.classList.add('live')};
- h.onpointermove=e=>{if(!drag)return;A.w=Math.max(300,Math.min(640,innerWidth-12-e.clientX));layout();post({t:'ai_w',w:A.w})};
+ h.onpointermove=e=>{if(!drag)return;A.w=Math.max(300,Math.min(640,innerWidth-8-e.clientX));layout();post({t:'ai_w',w:A.w})};
  h.onpointerup=()=>{drag=false;h.classList.remove('live');post({t:'ai_wend'})};
  document.addEventListener('click',e=>{closeMenus();if(!e.target.closest('#qtr')){const m=$('#qtr .ddm');if(m)m.remove()}});
  $('#amsgs').addEventListener('click',e=>{
   const a=e.target.closest('a[data-l]');if(a){e.preventDefault();post({t:'open',url:a.getAttribute('href')});return}
   const c=e.target.closest('.cp');if(c){const code=c.closest('.cb').querySelector('code').textContent;try{navigator.clipboard.writeText(code)}catch(_){}c.textContent='Copied';setTimeout(()=>c.textContent='Copy',1200)}});
 }
-function layout(){const r=document.documentElement.style;r.setProperty('--aiw',A.w+'px');r.setProperty('--rt',A.open?(12+A.w+8)+'px':'12px');
+function layout(){const r=document.documentElement.style;r.setProperty('--aiw',A.w+'px');r.setProperty('--rt',A.open?(8+A.w+8)+'px':'8px');
  const p=$('#aip');p.classList.toggle('open',A.open);p.classList.toggle('web',isWeb());$('#aibtn').classList.toggle('on',A.open)}
 
 // ---------- render ----------
@@ -112,7 +112,7 @@ function emptyCard(){const p=prov(),c=document.createElement('div');c.className=
 function msgEl(m,i,last){const d=document.createElement('div');d.className='m '+(m.role==='user'?'user':'ai')+(m.error?' err':'');
  if(m.role==='user'){d.innerHTML=md(m.content);return d}
  const live=A.streaming&&A.streaming.asst===m;
- d.innerHTML=`<div class="mb">${md(m.content)}${live?'<span class="cur"></span>':''}</div>${m.error?`<div class="mb" style="margin-top:6px">⚠ ${esc(m.error)}</div>`:''}${live||!m.content?'':'<div class="mact"><button class="mcp">Copy</button></div>'}`;
+ d.innerHTML=`<div class="mb">${md(m.content)}${live?'<span class="cur"></span>':''}</div>${m.error?`<div class="mb" style="margin-top:6px">${esc(m.error)}</div>`:''}${live||!m.content?'':'<div class="mact"><button class="mcp">Copy</button></div>'}`;
  const b=d.querySelector('.mcp');if(b)b.onclick=()=>{try{navigator.clipboard.writeText(m.content)}catch(_){}b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1100)};return d}
 function renderMsgs(keepScroll){const c=$('#amsgs');if(!c)return;const near=c.scrollHeight-c.scrollTop-c.clientHeight<80;c.innerHTML='';A.streamEl=null;
  if(needsKey()){c.appendChild(setupCard());return}
@@ -122,10 +122,10 @@ function renderMsgs(keepScroll){const c=$('#amsgs');if(!c)return;const near=c.sc
 function renderHist(){const h=$('#ahist');h.classList.toggle('open',A.hist);if(!A.hist)return;h.innerHTML='';
  if(!A.chats.length){h.innerHTML='<div class="empty"><p>No saved chats in this space yet.</p></div>';return}
  [...A.chats].sort((a,b)=>b.ts-a.ts).forEach(c=>{const r=document.createElement('div');r.className='hi'+(c.id===A.cur?' on':'');
-  r.innerHTML=`<span></span><small>${new Date(c.ts).toLocaleDateString([],{month:'short',day:'numeric'})}</small><button class="ib" title="Delete"><svg viewBox="0 0 10 10" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 2l6 6M8 2l-6 6"/></svg></button>`;r.children[0].textContent=c.title||'New chat';
+  r.innerHTML=`<span></span><small>${new Date(c.ts).toLocaleDateString([],{month:'short',day:'numeric'})}</small><button class="ib" title="Delete">${ico('x')}</button>`;r.children[0].textContent=c.title||'New chat';
   r.onclick=()=>{A.cur=c.id;A.hist=false;renderHist();renderMsgs()};
   r.querySelector('button').onclick=e=>{e.stopPropagation();A.chats=A.chats.filter(x=>x.id!==c.id);if(A.cur===c.id)A.cur=null;saveChats();renderHist();renderMsgs()};h.appendChild(r)})}
-function renderFoot(){const s=A.streaming;$('#asend').textContent=s?'■':'➤';$('#asend').title=s?'Stop':'Send';
+function renderFoot(){const s=A.streaming;$('#asend').innerHTML=ico(s?'stop':'send');$('#asend').title=s?'Stop':'Send';
  $('#qask').classList.toggle('on',A.cfg.ctx==='page');$('#qtabs').classList.toggle('on',A.cfg.ctx==='tabs');
  $('#ain2').placeholder=A.cfg.ctx==='page'?'Ask about this page…':A.cfg.ctx==='tabs'?'Ask about all open tabs…':'Ask anything…';
  $('#aip .afoot').style.opacity=needsKey()?.45:1}

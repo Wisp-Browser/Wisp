@@ -6,6 +6,38 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-20
+
+A full redesign of the interface. Features, settings and data are unchanged.
+
+### Added
+- **Layouts** (Settings → Appearance, and the first-run setup): *Classic* (tabs on top, toolbar below),
+  *Compact* (tabs and address bar in one slim row) and *Vertical* (collapsible tab sidebar, slim toolbar).
+  Switching applies instantly and is remembered.
+- **Glass effects on/off.** Glass uses the Windows 11 Mica backdrop for the window blur; Flat uses solid,
+  opaque surfaces. Wisp falls back to Flat by itself when Windows can't blur the window (older Windows,
+  or “Transparency effects” turned off).
+- A short first-run setup (theme, layout, glass) with clickable previews.
+
+### Changed
+- New visual design: frosted glass surfaces with a light top edge, pill-shaped address bar and buttons,
+  12–20px rounded tabs and cards, one blue-violet accent, the system font, and one outline icon set.
+- Design tokens shared by Glass and Flat (switching only swaps values), dark by default plus light.
+- Animations are 100–200ms ease-out using only transform and opacity: tabs open, close and reorder
+  smoothly, menus fade and scale in, layout and style switches crossfade. The system reduce-motion
+  setting is respected (including the new tab page's animated background).
+- Only open menus and popups use a GPU blur; the bars and sidebar rely on the OS backdrop.
+- The old default accent colour is replaced by the new one; an accent you picked yourself is kept.
+- Settings has an Appearance section; the More menu has icons and a light/dark switch.
+
+### Fixed
+- Menus and popups no longer get clipped by the page while their open animation plays.
+- Settings no longer jumps back to the top whenever a page in the background updates.
+- Pressing Enter on a highlighted address-bar suggestion opens that suggestion.
+- The tab context menu and toasts stay visible above the page in every layout.
+- The animated star background of the chrome no longer runs (and uses CPU) behind the page while idle.
+- New tab widgets no longer show faint full-width bars behind them, and the speed dial no longer wraps early.
+
 ## [0.1.0] - 2026-11-19
 
 First public build.

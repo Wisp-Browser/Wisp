@@ -46,18 +46,53 @@ const AI_JS: &str = include_str!("../ui/ai.js");
 const AI_CSS: &str = include_str!("../ui/ai.css");
 const M5_JS: &str = include_str!("../ui/m5.js");
 const M5_CSS: &str = include_str!("../ui/m5.css");
+const THEME_CSS: &str = include_str!("../ui/theme.css");
+const ICONS_JS: &str = include_str!("../ui/icons.js");
 
 /// Origin served by our custom `wisp` protocol (WebView2 maps it to http://wisp.localhost).
 const BASE: &str = "http://wisp.localhost";
 const NEWTAB_URL: &str = "http://wisp.localhost/newtab";
 const NEWTAB_ID: &str = "wisp://newtab";
 
-// Layout (logical px) — mirrored in ui/chrome.html
-const CONTENT_X: f64 = 260.0;
-const CONTENT_Y: f64 = 94.0;
-const CONTENT_PAD: f64 = 12.0;
+// Layout geometry (logical px) — mirrored in ui/chrome.html (--ct, --cl, --sw).
+const CONTENT_PAD: f64 = 8.0;
+const TOP_CLASSIC: f64 = 86.0; // tab strip (40) + toolbar (44) + gap
+const TOP_SLIM: f64 = 48.0; // one 46px row (Compact, Vertical) + gap
+const SIDE_W: f64 = 232.0; // Vertical: tab sidebar
+const SIDE_W_MIN: f64 = 52.0; // Vertical: collapsed sidebar
 const AI_HEAD: f64 = 92.0; // height of the AI panel header (mirrored in ui/ai.css)
-const PANEL_TOP: f64 = 46.0;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Lay {
+    Classic,
+    Compact,
+    Vertical,
+}
+
+impl Lay {
+    fn parse(s: &str) -> Lay {
+        match s {
+            "compact" => Lay::Compact,
+            "vertical" => Lay::Vertical,
+            _ => Lay::Classic,
+        }
+    }
+}
+
+/// Where page views go for a window of `w`×`h` (before the AI panel takes its share on the right).
+fn content_rect(lay: Lay, collapsed: bool, w: f64, h: f64, right: f64) -> R {
+    let top = if lay == Lay::Classic { TOP_CLASSIC } else { TOP_SLIM };
+    let left = match lay {
+        Lay::Vertical => CONTENT_PAD + if collapsed { SIDE_W_MIN } else { SIDE_W } + CONTENT_PAD,
+        _ => CONTENT_PAD,
+    };
+    R {
+        x: left,
+        y: top,
+        w: (w - left - right).max(1.0),
+        h: (h - top - CONTENT_PAD).max(1.0),
+    }
+}
 
 /// Injected into every page: shortcuts, pane focus, ad-hiding CSS, the PiP button, and the
 /// "Ask Wisp AI" selection menu. `__N__` is a per-session secret so web pages cannot forge AI requests.
@@ -70,11 +105,12 @@ const combo=e=>{const m=[];if(e.ctrlKey||e.metaKey)m.push('ctrl');if(e.altKey)m.
  let k=CODES[e.code]||(/^Key[A-Z]$/.test(e.code)?e.code[3].toLowerCase():/^Digit\d$/.test(e.code)?e.code[5]:/^F\d+$/.test(e.code)?e.code.toLowerCase():String(e.key).toLowerCase());m.push(k);return m.join('+')};
 addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey||e.altKey||/^F\d+$/.test(e.code)))return;const c=combo(e);if(window.__wk.has(c)){e.preventDefault();e.stopPropagation();p({t:'key',k:c})}},true);
 addEventListener('mousedown',()=>p({t:'focus'}),true);
+const SP='<svg viewBox="0 0 24 24"><path d="M11 3.5l1.9 5.1 5.1 1.9-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/><path d="M18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>';
 let host=null;const hide=()=>{if(host){host.remove();host=null}};
 addEventListener('contextmenu',e=>{const s=String(getSelection()||'').trim();if(s.length<2){hide();return}
  e.preventDefault();hide();host=document.createElement('div');host.style.cssText='all:initial;position:fixed;z-index:2147483647;left:0;top:0';
  const r=host.attachShadow({mode:'closed'}),x=Math.max(4,Math.min(e.clientX,innerWidth-214)),y=Math.max(4,Math.min(e.clientY,innerHeight-150));
- r.innerHTML='<style>.m{position:fixed;left:'+x+'px;top:'+y+'px;width:206px;padding:6px;border-radius:14px;background:rgba(24,22,52,.92);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 40px rgba(0,0,0,.45);font:13px Segoe UI,system-ui,sans-serif;animation:i .12s ease}@keyframes i{from{opacity:0;transform:translateY(-4px)}}button{display:block;width:100%;text-align:left;height:32px;border:0;border-radius:9px;background:none;color:#f1efff;padding:0 10px;font:inherit;cursor:default}button:hover{background:rgba(255,255,255,.1)}</style><div class="m"><button data-a="explain">✦ Explain with Wisp AI</button><button data-a="translate">✦ Translate with Wisp AI</button><button data-a="copy">Copy</button></div>';
+ r.innerHTML='<style>.m{position:fixed;left:'+x+'px;top:'+y+'px;width:206px;padding:6px;border-radius:16px;background:rgba(30,30,42,.86);backdrop-filter:blur(24px) saturate(150%);border:1px solid rgba(255,255,255,.08);border-top-color:rgba(255,255,255,.14);box-shadow:0 18px 48px rgba(0,0,0,.42);font:13px system-ui,Segoe UI,sans-serif;animation:i .16s cubic-bezier(.16,.84,.44,1)}@keyframes i{from{opacity:0;transform:scale(.97) translateY(-4px)}}@media (prefers-reduced-motion:reduce){.m{animation:none}}button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;height:34px;border:0;border-radius:10px;background:none;color:#f2f2f7;padding:0 10px;font:inherit;cursor:default}button:hover{background:rgba(255,255,255,.08)}svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;opacity:.75}</style><div class="m"><button data-a="explain">'+SP+'Explain with Wisp AI</button><button data-a="translate">'+SP+'Translate with Wisp AI</button><button data-a="copy"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.5"/><path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg>Copy</button></div>';
  r.querySelectorAll('button').forEach(b=>b.addEventListener('click',ev=>{if(!ev.isTrusted)return;const a=b.dataset.a;if(a==='copy'){try{navigator.clipboard.writeText(s)}catch(_){}}else p({t:'ai_sel',n:N,mode:a,text:s.slice(0,6000)});hide()}));
  document.documentElement.appendChild(host)},true);
 addEventListener('mousedown',e=>{if(host&&!e.composedPath().includes(host))hide()},true);addEventListener('scroll',hide,true);
@@ -83,7 +119,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape')hide()},true);
 let pip=null,pipV=null;
 document.addEventListener('pointerover',e=>{const v=e.target&&e.target.closest&&e.target.closest('video');if(!v||!document.pictureInPictureEnabled||v.disablePictureInPicture||v.videoWidth<200)return;
  if(pip&&pipV===v)return;if(pip){pip.remove();pip=null}pipV=v;const b=document.createElement('div');b.style.cssText='all:initial;position:fixed;z-index:2147483646';
- const sr=b.attachShadow({mode:'closed'});sr.innerHTML='<style>button{position:fixed;width:34px;height:34px;border-radius:17px;border:1px solid rgba(255,255,255,.25);background:rgba(20,18,40,.78);color:#fff;font:15px system-ui;cursor:default;backdrop-filter:blur(8px)}button:hover{background:rgba(255,107,94,.9)}</style><button title="Picture in picture">⧉</button>';
+ const sr=b.attachShadow({mode:'closed'});sr.innerHTML='<style>button{position:fixed;width:34px;height:34px;border-radius:17px;border:1px solid rgba(255,255,255,.2);background:rgba(30,30,42,.8);color:#fff;cursor:default;backdrop-filter:blur(12px);display:grid;place-items:center;padding:0;transition:background-color .16s}button:hover{background:#5e5ce6}svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}</style><button title="Picture in picture"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="3"/><rect x="12" y="11.5" width="6.5" height="5" rx="1.2"/></svg></button>';
  const bt=sr.querySelector('button'),r=v.getBoundingClientRect();bt.style.left=Math.max(8,r.right-44)+'px';bt.style.top=Math.max(8,r.top+10)+'px';
  bt.addEventListener('click',ev=>{if(!ev.isTrusted)return;(document.pictureInPictureElement===v?document.exitPictureInPicture():v.requestPictureInPicture()).catch(()=>{});});
  document.documentElement.appendChild(b);pip=b;const gone=()=>{if(pip){pip.remove();pip=null;pipV=null}};v.addEventListener('pointerleave',ev=>{setTimeout(()=>{if(pip&&!pip.matches(':hover'))gone()},900)},{once:true});setTimeout(gone,6000)},true);
@@ -103,13 +139,13 @@ const kids=[];root.querySelectorAll('h1,h2,h3,h4,p,ul,ol,pre,blockquote,figure i
 const h1=document.querySelector('h1'),title=(h1&&h1.innerText.trim())||document.title;
 const o=document.createElement('div');o.id='wisp-reader';o.style.cssText='all:initial;position:fixed;inset:0;z-index:2147483647;overflow:auto;background:#fbf8f3;color:#2a2a33;font:19px/1.75 Georgia,serif';
 const sr=o.attachShadow({mode:'open'});let size=19,dark=false;
-const draw=()=>{sr.innerHTML='<style>:host{all:initial}.w{position:relative;max-width:700px;margin:0 auto;padding:60px 24px 120px;font-size:'+size+'px;line-height:1.75;color:'+(dark?'#d8d6e6':'#2a2a33')+'}.bg{position:fixed;inset:0;background:'+(dark?'#16152a':'#fbf8f3')+'}h1{font-size:1.9em;line-height:1.25;margin:0 0 .6em}h2,h3,h4{margin:1.5em 0 .4em;line-height:1.3}img{max-width:100%;border-radius:10px}pre{overflow:auto;padding:14px;border-radius:10px;background:'+(dark?'#0f0e1f':'#f0ebe2')+';font:14px/1.5 Consolas,monospace}blockquote{margin:1em 0;padding-left:16px;border-left:3px solid #ff6b5e;opacity:.85}.bar{position:fixed;top:14px;right:18px;display:flex;gap:6px;font:14px system-ui}.bar button{height:32px;min-width:32px;padding:0 10px;border-radius:16px;border:1px solid rgba(128,128,128,.4);background:'+(dark?'#26253f':'#fff')+';color:inherit;cursor:default}.bar button:hover{border-color:#ff6b5e}</style><div class="bg"></div><div class="bar"><button id="m">A−</button><button id="p">A+</button><button id="t">◐</button><button id="x">✕</button></div><div class="w"><h1></h1>'+kids.join('')+'</div>';
+const draw=()=>{sr.innerHTML='<style>:host{all:initial}.w{position:relative;max-width:700px;margin:0 auto;padding:60px 24px 120px;font-size:'+size+'px;line-height:1.75;color:'+(dark?'#d8d6e6':'#2a2a33')+'}.bg{position:fixed;inset:0;background:'+(dark?'#16152a':'#fbf8f3')+'}h1{font-size:1.9em;line-height:1.25;margin:0 0 .6em}h2,h3,h4{margin:1.5em 0 .4em;line-height:1.3}img{max-width:100%;border-radius:10px}pre{overflow:auto;padding:14px;border-radius:10px;background:'+(dark?'#0f0e1f':'#f0ebe2')+';font:14px/1.5 Consolas,monospace}blockquote{margin:1em 0;padding-left:16px;border-left:3px solid #5e5ce6;opacity:.85}.bar{position:fixed;top:14px;right:18px;display:flex;gap:6px;font:14px system-ui}.bar button{height:32px;min-width:32px;padding:0 10px;border-radius:16px;border:1px solid rgba(128,128,128,.4);background:'+(dark?'#26253f':'#fff')+';color:inherit;cursor:default}.bar button:hover{border-color:#5e5ce6}</style><div class="bg"></div><div class="bar"><button id="m">A−</button><button id="p">A+</button><button id="t">◐</button><button id="x">✕</button></div><div class="w"><h1></h1>'+kids.join('')+'</div>';
  sr.querySelector('h1').textContent=title;sr.getElementById('m').onclick=()=>{size=Math.max(14,size-2);draw()};sr.getElementById('p').onclick=()=>{size=Math.min(32,size+2);draw()};sr.getElementById('t').onclick=()=>{dark=!dark;draw()};sr.getElementById('x').onclick=()=>o.remove()};
 draw();addEventListener('keydown',function k(e){if(e.key==='Escape'){o.remove();removeEventListener('keydown',k,true)}},true);document.documentElement.appendChild(o)})()"#;
 
 /// Shown briefly inside the page when F11 full screen starts.
 const FULLSCREEN_HINT_JS: &str = r#"(function(){const h=document.createElement('div');h.style.cssText='all:initial;position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none';
-const s=h.attachShadow({mode:'closed'});s.innerHTML='<style>div{font:13px Segoe UI,system-ui,sans-serif;color:#fff;background:rgba(20,18,40,.88);border:1px solid rgba(255,255,255,.18);padding:9px 16px;border-radius:20px;box-shadow:0 8px 30px rgba(0,0,0,.4);animation:o .4s ease 2.2s forwards}@keyframes o{to{opacity:0}}</style><div>Press F11 or Esc to exit full screen</div>';
+const s=h.attachShadow({mode:'closed'});s.innerHTML='<style>div{font:13px Segoe UI,system-ui,sans-serif;color:#fff;background:rgba(30,30,42,.88);border:1px solid rgba(255,255,255,.14);padding:9px 16px;border-radius:999px;box-shadow:0 8px 30px rgba(0,0,0,.4);animation:o .4s ease 2.2s forwards}@keyframes o{to{opacity:0}}</style><div>Press F11 or Esc to exit full screen</div>';
 document.documentElement.appendChild(h);setTimeout(()=>h.remove(),2800)})()"#;
 
 /// Extracts readable text from a page for the AI actions.
@@ -176,6 +212,7 @@ enum Ev {
     FindCount(usize),
     Upd(String),
     Engine(Arc<blocker::Engine>, String),
+    Show,
 }
 
 struct Tab {
@@ -306,8 +343,62 @@ fn attach_fullscreen(view: &WebView, proxy: EventLoopProxy<Ev>, tid: Arc<AtomicU
     }
 }
 
-/// Corner radius (logical px) of the page area; matches `--r` in the chrome CSS.
-const PAGE_RADIUS: f64 = 14.0;
+/// Windows "Personalization → Colors → Transparency effects" (also off in some battery/accessibility modes).
+#[cfg(windows)]
+fn transparency_enabled() -> bool {
+    use windows::{
+        core::w,
+        Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
+    };
+    let mut v: u32 = 1;
+    let mut len = std::mem::size_of::<u32>() as u32;
+    // SAFETY: reads one DWORD into a local buffer of the stated size.
+    let r = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"),
+            w!("EnableTransparency"),
+            RRF_RT_REG_DWORD,
+            None,
+            Some(&mut v as *mut u32 as *mut _),
+            Some(&mut len),
+        )
+    };
+    r.is_err() || v != 0
+}
+
+/// The window blur comes from the OS (Mica on Windows 11 22H2+), so the GPU never blurs the static
+/// chrome. Returns whether the system supports it; when it doesn't, the UI uses the Flat style.
+#[cfg(windows)]
+fn set_backdrop(window: &Window, on: bool, dark: bool) -> bool {
+    use tao::platform::windows::WindowExtWindows;
+    use windows::Win32::{
+        Foundation::{BOOL, HWND},
+        Graphics::Dwm::{
+            DwmSetWindowAttribute, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+        },
+    };
+    let hwnd = HWND(window.hwnd() as *mut _);
+    let transp = transparency_enabled();
+    let kind = if on && transp { DWMSBT_TABBEDWINDOW } else { DWMSBT_NONE };
+    // SAFETY: DWM attribute writes on our own top-level window, each with a correctly sized value.
+    unsafe {
+        let dark = BOOL::from(dark);
+        let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark as *const _ as _, 4);
+        let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_ROUND as *const _ as _, 4);
+        let r = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &kind as *const _ as _, 4);
+        r.is_ok() && transp
+    }
+}
+
+#[cfg(not(windows))]
+fn set_backdrop(_window: &Window, _on: bool, _dark: bool) -> bool {
+    false
+}
+
+/// Corner radius (logical px) of the page area; matches `.ring` in the chrome CSS.
+const PAGE_RADIUS: f64 = 12.0;
 
 #[cfg(windows)]
 /// Clip a page webview's host window to a rounded rectangle (child windows are square by default),
@@ -430,6 +521,8 @@ fn serve(req: Request<Vec<u8>>, dir: &Path) -> Response<Cow<'static, [u8]>> {
         "/m5.js" => respond(200, "text/javascript; charset=utf-8", M5_JS.as_bytes().to_vec()),
         "/m5.css" => respond(200, "text/css; charset=utf-8", M5_CSS.as_bytes().to_vec()),
         "/ai.css" => respond(200, "text/css; charset=utf-8", AI_CSS.as_bytes().to_vec()),
+        "/theme.css" => respond(200, "text/css; charset=utf-8", THEME_CSS.as_bytes().to_vec()),
+        "/icons.js" => respond(200, "text/javascript; charset=utf-8", ICONS_JS.as_bytes().to_vec()),
         p if p.starts_with("/wall/") => {
             let name = &p[6..];
             if name.contains(['/', '\\']) || name.contains("..") {
@@ -516,6 +609,7 @@ struct App {
     keys: HashMap<String, bool>,
     nonce: String,
     last_sel: Instant,
+    glass_ok: bool,
 }
 
 impl App {
@@ -534,11 +628,28 @@ impl App {
             return R { x: 0.0, y: 0.0, w, h };
         }
         let right = CONTENT_PAD + if self.ai_open { self.ai_w + 8.0 } else { 0.0 };
-        R {
-            x: CONTENT_X,
-            y: CONTENT_Y,
-            w: w - CONTENT_X - right,
-            h: h - CONTENT_Y - CONTENT_PAD,
+        content_rect(self.lay(), self.settings.side_collapsed, w, h, right)
+    }
+    fn lay(&self) -> Lay {
+        Lay::parse(&self.settings.layout)
+    }
+    /// Light chrome: the theme setting, or a light wallpaper in the current space.
+    fn light(&self) -> bool {
+        self.settings.light || self.space().nt["wall"]["light"].as_bool().unwrap_or(false)
+    }
+    /// Glass is shown only when it is on and the OS can blur the window.
+    fn glass(&self) -> bool {
+        self.settings.glass_on && self.glass_ok
+    }
+    /// Turn the OS window backdrop (Mica) on/off to match the current style and theme.
+    fn sync_backdrop(&mut self) {
+        let (want, dark) = (self.settings.glass_on, !self.light());
+        let ok = set_backdrop(&self.window, want, dark);
+        // `ok` reports support: when glass is off we still learn whether it could be on.
+        if ok != self.glass_ok {
+            self.glass_ok = ok;
+            self.push_state();
+            self.push_nt();
         }
     }
     fn space(&self) -> &Space {
@@ -588,6 +699,7 @@ impl App {
             &self.settings.block_off,
         );
         let (https, tbn) = (self.https.clone(), tb.clone());
+        let backdrop = if self.light() { (255, 255, 255, 255) } else { (23, 23, 31, 255) };
         let dir = store::data_dir();
         let d2 = dir.clone();
         let ctx = self
@@ -598,8 +710,8 @@ impl App {
             .with_web_context(ctx)
             .with_bounds(to_rect(rect))
             .with_visible(false)
-            // Dark backdrop so a page that has not painted yet never flashes white or black.
-            .with_background_color((12, 12, 32, 255))
+            // Theme-coloured backdrop so a page that has not painted yet never flashes white or black.
+            .with_background_color(backdrop)
             .with_initialization_script(&init)
             .with_custom_protocol("wisp".into(), move |req| serve(req, &d2))
             .with_ipc_handler(move |req| {
@@ -827,11 +939,12 @@ impl App {
 
     fn ai_web_rect(&self) -> R {
         let (w, h) = self.size();
+        let top = self.content().y;
         R {
             x: w - CONTENT_PAD - self.ai_w + 2.0,
-            y: PANEL_TOP + AI_HEAD,
+            y: top + AI_HEAD,
             w: self.ai_w - 4.0,
-            h: h - CONTENT_PAD - PANEL_TOP - AI_HEAD - 2.0,
+            h: h - CONTENT_PAD - top - AI_HEAD - 2.0,
         }
     }
 
@@ -999,7 +1112,7 @@ impl App {
             .take(8)
             .map(|t| json!({"title":t.title,"url":t.url}))
             .collect();
-        json!({"cfg":s.nt,"theme":{"accent":self.settings.accent,"glass":self.settings.glass,"light":self.settings.light,"perf":self.settings.perf},
+        json!({"cfg":s.nt,"theme":{"accent":self.settings.accent,"glass":self.settings.glass,"light":self.settings.light,"perf":self.settings.perf,"flat":!self.glass()},
                "recent":recent,"space":{"name":s.name,"color":s.color}})
     }
 
@@ -1067,6 +1180,8 @@ impl App {
         let st = json!({"spaces":spaces,"cur":s.id,"tabs":tabs,"active":s.active,"split":split,"panes":panes,"divs":divs,
             "engines":engines,"engine":self.settings.engine,"light":self.settings.light,
             "accent":self.settings.accent,"glass":self.settings.glass,"perf":self.settings.perf,"nt":s.nt,
+            "layout":self.settings.layout,"glass_on":self.settings.glass_on,"glass_ok":self.glass_ok,
+            "collapsed":self.settings.side_collapsed,"setup":self.settings.setup,
             "ai":{"open":self.ai_open,"w":self.ai_w,"keys":self.keys,"cfg":self.settings.ai},
             "private":store::is_private(),"version":env!("CARGO_PKG_VERSION"),"fullscreen":self.fullscreen,
             "s":{"suggest":self.settings.suggest,"blocker":self.settings.blocker,"https_only":self.settings.https_only,
@@ -1257,6 +1372,7 @@ impl App {
                 std::thread::sleep(Duration::from_millis(1200));
                 let _ = p.send_event(Ev::MakeSpare(sid));
             });
+            self.sync_backdrop();
             self.refresh();
         }
     }
@@ -1569,7 +1685,10 @@ impl App {
                     self.open_tab(&u, false);
                 }
             }
-            "ready" => self.refresh(),
+            "ready" => {
+                self.refresh();
+                self.show_window();
+            }
             "nt_ready" => self.push_nt(),
             "focus" => {
                 if !self.holes.is_empty() {
@@ -1620,6 +1739,7 @@ impl App {
             "theme" => {
                 self.settings.light = !self.settings.light;
                 store::save_settings(&self.settings);
+                self.sync_backdrop();
                 self.push_state();
                 self.push_nt();
             }
@@ -1648,6 +1768,9 @@ impl App {
                 }
                 self.persist();
                 self.push_nt_except(from);
+                if si == self.cur {
+                    self.sync_backdrop(); // a light wallpaper switches the chrome (and Mica tint) to light
+                }
             }
             "pick_wallpaper" => {
                 let tab = from.unwrap_or(0);
@@ -1760,6 +1883,15 @@ impl App {
             std::thread::sleep(Duration::from_millis(900));
             let _ = p.send_event(Ev::Reap);
         });
+    }
+
+    /// The window starts hidden and appears once the chrome has painted, so a transparent window
+    /// never flashes see-through at startup.
+    fn show_window(&self) {
+        if !self.window.is_visible() {
+            self.window.set_visible(true);
+            self.window.set_focus();
+        }
     }
 
     fn apply_fullscreen(&mut self) {
@@ -2057,6 +2189,33 @@ impl App {
                 }
             }
             "shortcuts" => self.settings.shortcuts = v.clone(),
+            // Appearance: applied instantly (page views move, chrome re-arranges), saved for next start.
+            "layout" | "side_collapsed" => {
+                if k == "layout" {
+                    let l = v.as_str().unwrap_or("classic");
+                    self.settings.layout = if matches!(l, "classic" | "compact" | "vertical") {
+                        l
+                    } else {
+                        "classic"
+                    }
+                    .into();
+                } else {
+                    self.settings.side_collapsed = v.as_bool().unwrap_or(false);
+                }
+                store::save_settings(&self.settings);
+                self.rounded.clear();
+                self.refresh();
+                return;
+            }
+            "glass_on" => {
+                self.settings.glass_on = v.as_bool().unwrap_or(true);
+                store::save_settings(&self.settings);
+                self.sync_backdrop();
+                self.push_state();
+                self.push_nt();
+                return;
+            }
+            "setup_done" => self.settings.setup = false,
             "unblock_site" => {
                 if let Some(h) = v.as_str() {
                     self.blocker.allow.write().unwrap().remove(h);
@@ -2295,6 +2454,7 @@ impl App {
                 self.push_state();
             }
             Ev::NewWindow(u) => self.open_tab(&u, false),
+            Ev::Show => self.show_window(),
             Ev::AiGo(id, pages) => self.ai_go(&id, pages),
             Ev::AiDelta(id, text) => {
                 if self.pending.contains_key(&id) {
@@ -2482,12 +2642,30 @@ fn main() {
         .with_title(if private { "Wisp (Private)" } else { "Wisp" })
         .with_window_icon(icon)
         .with_decorations(false)
+        // Transparent so the OS backdrop (Mica) shows through the chrome in the Glass style.
+        .with_transparent(true)
+        .with_visible(false)
         .with_inner_size(LogicalSize::new(1280.0, 800.0))
-        .with_min_inner_size(LogicalSize::new(820.0, 520.0))
-        .build(&event_loop)
-        .expect("window");
+        .with_min_inner_size(LogicalSize::new(820.0, 520.0));
+    // No GDI redirection surface: the WebView's composition layers sit directly on the OS backdrop.
+    #[cfg(windows)]
+    let window = {
+        use tao::platform::windows::WindowBuilderExtWindows;
+        window.with_no_redirection_bitmap(true)
+    };
+    let window = window.build(&event_loop).expect("window");
 
-    let settings = store::load_settings();
+    // No settings file yet means a brand-new install: show the first-run setup, starting from Classic.
+    let first_run = !private && !store::data_dir().join("settings.json").exists();
+    let mut settings = store::load_settings();
+    if first_run {
+        settings.setup = true;
+        settings.layout = "classic".into();
+    }
+    // The old default accent becomes the new default; an accent the user picked is kept.
+    if settings.accent == "#ff6b5e" {
+        settings.accent = "#5e5ce6".into();
+    }
     let st = store::load_state();
     let mut next_id = st.next_id.max(1);
     let mut spaces: Vec<Space> = st
@@ -2560,6 +2738,7 @@ fn main() {
             h: size.height,
         }))
         .with_custom_protocol("wisp".into(), move |req| serve(req, &d2))
+        .with_transparent(true)
         .with_url(format!("{BASE}/chrome"))
         .with_ipc_handler(move |req| {
             let _ = p.send_event(Ev::Ipc(req.into_body()));
@@ -2634,8 +2813,18 @@ fn main() {
             .collect(),
         nonce: make_nonce(),
         last_sel: Instant::now() - Duration::from_secs(5),
+        glass_ok: false,
     };
+    app.glass_ok = set_backdrop(&app.window, app.settings.glass_on, !app.light());
 
+    {
+        // Safety net: show the window even if the chrome never reports "ready".
+        let p = app.proxy.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(2000));
+            let _ = p.send_event(Ev::Show);
+        });
+    }
     {
         let (p, sid) = (app.proxy.clone(), app.spaces[app.cur].id);
         std::thread::spawn(move || {
@@ -2677,6 +2866,12 @@ fn main() {
                 let _ = app.chrome.set_bounds(to_rect(R { x: 0.0, y: 0.0, w, h }));
                 app.refresh();
             }
+            // Re-check blur support when the window comes back (the user may have changed
+            // "Transparency effects" meanwhile); this falls back to Flat or back to Glass.
+            Event::WindowEvent {
+                event: WindowEvent::Focused(true),
+                ..
+            } => app.sync_backdrop(),
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
@@ -2693,6 +2888,23 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn layout_content_rects() {
+        // Mirrors ui/chrome.html: --ct (content top), --cl (content left), 8px gutters.
+        let r = content_rect(Lay::Classic, false, 1280.0, 800.0, CONTENT_PAD);
+        assert_eq!((r.x, r.y, r.w, r.h), (8.0, 86.0, 1264.0, 706.0));
+        let r = content_rect(Lay::Compact, false, 1280.0, 800.0, CONTENT_PAD);
+        assert_eq!((r.x, r.y), (8.0, 48.0));
+        let r = content_rect(Lay::Vertical, false, 1280.0, 800.0, CONTENT_PAD);
+        assert_eq!((r.x, r.y, r.w), (248.0, 48.0, 1024.0));
+        let r = content_rect(Lay::Vertical, true, 1280.0, 800.0, CONTENT_PAD);
+        assert_eq!(r.x, 68.0);
+        // The AI panel takes its share on the right.
+        let r = content_rect(Lay::Classic, false, 1280.0, 800.0, CONTENT_PAD + 380.0 + 8.0);
+        assert_eq!(r.w, 1280.0 - 8.0 - 396.0);
+        assert_eq!(Lay::parse("nonsense"), Lay::Classic);
+    }
 
     #[test]
     fn https_upgrade_rules() {

@@ -66,13 +66,21 @@ pub struct Settings {
     pub block_off: Vec<String>,
     pub auto_update: bool,
     pub channel: String,
+    /// "classic" | "compact" | "vertical"
+    pub layout: String,
+    /// Glass effects (falls back to Flat when the OS can't blur the window).
+    pub glass_on: bool,
+    /// Vertical layout: tab sidebar collapsed to icons.
+    pub side_collapsed: bool,
+    /// The first-run setup still has to be shown.
+    pub setup: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
         Self {
             engine: "ddg".into(),
             light: false,
-            accent: "#ff6b5e".into(),
+            accent: "#5e5ce6".into(),
             glass: 0.5,
             perf: false,
             ai: Value::Null,
@@ -85,6 +93,11 @@ impl Default for Settings {
             block_off: vec![],
             auto_update: true,
             channel: "stable".into(),
+            // Settings files from before layouts existed keep the old sidebar arrangement.
+            layout: "vertical".into(),
+            glass_on: true,
+            side_collapsed: false,
+            setup: false,
         }
     }
 }
