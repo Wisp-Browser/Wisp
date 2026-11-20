@@ -18,7 +18,7 @@ body{
  --surface:rgba(30,30,42,var(--sa,.7)); /* sidebar, cards (no blur: sits on the OS-blurred backdrop) */
  --raised:rgba(255,255,255,.075);       /* omnibox, inputs, active tab */
  --raised-2:rgba(255,255,255,.11);
- --menu:rgba(30,30,42,.8);              /* popups: these get a GPU blur */
+ --menu:rgba(30,30,42,.96);             /* popups: GPU blur over the chrome, solid enough over pages */
  --veil:rgba(8,8,14,.38);
  --hover:rgba(255,255,255,.07);--press:rgba(255,255,255,.12);
  --line:rgba(255,255,255,.08);--line-2:rgba(255,255,255,.14);
@@ -37,7 +37,7 @@ body.light{
  --surface:rgba(255,255,255,var(--sa,.7));
  --raised:rgba(255,255,255,.72);
  --raised-2:rgba(255,255,255,.92);
- --menu:rgba(252,252,255,.84);
+ --menu:rgba(252,252,255,.96);
  --veil:rgba(30,32,48,.16);
  --hover:rgba(20,20,40,.055);--press:rgba(20,20,40,.1);
  --line:rgba(20,20,40,.09);--line-2:rgba(20,20,40,.16);

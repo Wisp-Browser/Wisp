@@ -6,6 +6,16 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2-beta.1] - 2026-11-20
+
+### Fixed
+- Page corners are now smooth (anti-aliased) instead of pixelated. The chrome now sits above the pages and
+  draws their rounded corners itself, with clicks still going straight to the page.
+- Menus, popups and dialogs over a page have smooth corners too, and the page no longer gets cut out
+  behind them.
+- The Settings dialog is no longer clipped with a notch where it reaches above the page area.
+- Menus are more opaque so their text stays readable over busy pages.
+
 ## [0.2.1] - 2026-11-20
 
 ### Added

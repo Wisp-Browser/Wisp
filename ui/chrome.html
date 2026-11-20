@@ -7,10 +7,18 @@ body.lay-vertical{--cl:calc(var(--sw) + 16px)}
 body.lay-vertical.collapsed{--sw:52px}
 html{background:transparent}
 html,body{margin:0;height:100%;overflow:hidden}
-body{font:13px/1.35 var(--font);color:var(--fg);background:var(--bg);-webkit-font-smoothing:antialiased}
-body.osfx{background:transparent}
+body{font:13px/1.35 var(--font);color:var(--fg);background:transparent;-webkit-font-smoothing:antialiased}
+/* Background layers. The chrome window sits above the page views, so these are masked out of the page
+   areas (with smooth rounded corners) and the pages show through. */
+#bg{position:fixed;inset:0;pointer-events:none}
+#base{position:absolute;inset:0;background:var(--bg)}
+body.osfx #base{display:none}
+/* Over the window's Mica backdrop the page corners are covered by small wedges in Mica's colour. */
+body{--mica:#202020}body.light{--mica:#f3f3f3}
+#wedges i{position:fixed;display:block}
+body:not(.osfx) #wedges,#wall:not(.def)~#wedges{display:none}
 *{user-select:none}
-#wall,#wallv,#dim,#tint{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#wall,#wallv,#dim,#tint{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #wall{background-size:cover;background-position:center}
 #wall.def{background:none}
 body:not(.osfx) #wall.def{background:var(--bg)}
@@ -133,7 +141,7 @@ body.fs .row,body.fs #side{display:none}
 .z[data-e=left]{left:12px;top:12px;bottom:12px;width:30%}.z[data-e=right]{right:12px;top:12px;bottom:12px;width:30%}
 .z[data-e=top]{left:33%;right:33%;top:12px;height:40%}.z[data-e=bottom]{left:33%;right:33%;bottom:12px;height:40%}
 </style></head><body class="glass lay-classic">
-<div id="wall" class="def"></div><video id="wallv" muted loop playsinline></video><div id="dim"></div><div id="tint"></div>
+<div id="bg"><div id="base"></div><div id="wall" class="def"></div><video id="wallv" muted loop playsinline></video><div id="dim"></div><div id="wedges"></div><div id="tint"></div></div>
 <div class="rz" data-d="n" style="top:0;left:10px;right:10px;height:4px;cursor:n-resize"></div>
 <div class="rz" data-d="s" style="bottom:0;left:10px;right:10px;height:5px;cursor:s-resize"></div>
 <div class="rz" data-d="w" style="left:0;top:10px;bottom:10px;width:5px;cursor:w-resize"></div>
@@ -303,7 +311,18 @@ function wall(nt){const cfg=nt||{},w=cfg.wall,key=JSON.stringify([w,cfg.blur,cfg
   $('#dim').style.background=`rgba(0,0,0,${(cfg.dim||0)/100})`}
 // A playing video wallpaper is the only thing that would use CPU while idle: pause it when hidden.
 document.addEventListener('visibilitychange',()=>{const v=$('#wallv');if(v.style.display!=='block')return;document.hidden?v.pause():v.play().catch(()=>{})});
-window.wisp={state:s=>{S=Object.assign(S,s);render();if(window.AI)AI.state(S);if(window.M5)M5.state(S)},nt:n=>{S.nt=n;applyChrome();wall(n)},palette:()=>{if(window.M5)M5.palette()},ai:e=>window.AI&&AI.event(e)};
+// Page areas ("cuts") come from Rust whenever they change: mask them out of the background with
+// anti-aliased rounded corners, and add corner wedges for the Mica case.
+function cuts(c){const bg=$('#bg'),W=innerWidth,H=innerHeight,R=c.radius||12,list=c.r||[],round=c.round!==false;
+  if(!list.length){bg.style.webkitMaskImage=bg.style.maskImage='';$('#wedges').innerHTML='';return}
+  const rr=({x,y,w,h})=>{const r=round?Math.min(R,w/2,h/2):0;return `M${x+r} ${y}H${x+w-r}A${r} ${r} 0 0 1 ${x+w} ${y+r}V${y+h-r}A${r} ${r} 0 0 1 ${x+w-r} ${y+h}H${x+r}A${r} ${r} 0 0 1 ${x} ${y+h-r}V${y+r}A${r} ${r} 0 0 1 ${x+r} ${y}Z`};
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><path fill-rule="evenodd" d="M0 0H${W}V${H}H0Z${list.map(rr).join('')}"/></svg>`;
+  const url=`url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  Object.assign(bg.style,{webkitMaskImage:url,maskImage:url,webkitMaskSize:'100% 100%',maskSize:'100% 100%',webkitMaskRepeat:'no-repeat',maskRepeat:'no-repeat'});
+  $('#wedges').innerHTML=round?list.map(({x,y,w,h})=>[[x,y,'100% 100%'],[x+w-R,y,'0 100%'],[x,y+h-R,'100% 0'],[x+w-R,y+h-R,'0 0']].map(([l,t,at])=>
+    `<i style="left:${l}px;top:${t}px;width:${R}px;height:${R}px;background:radial-gradient(circle at ${at},transparent ${R-.6}px,var(--mica) ${R+.4}px)"></i>`).join('')).join(''):''}
+let lastCuts=null;addEventListener('resize',()=>{if(lastCuts)cuts(lastCuts)});
+window.wisp={cuts:c=>{lastCuts=c;cuts(c)},state:s=>{S=Object.assign(S,s);render();if(window.AI)AI.state(S);if(window.M5)M5.state(S)},nt:n=>{S.nt=n;applyChrome();wall(n)},palette:()=>{if(window.M5)M5.palette()},ai:e=>window.AI&&AI.event(e)};
 // controls
 $('#url').addEventListener('keydown',e=>{if(e.key==='Enter'){send({t:'go',input:e.target.value});e.target.blur()}});
 $('#url').addEventListener('focus',e=>e.target.select());

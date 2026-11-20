@@ -306,18 +306,30 @@ fn base_builder(window: &Window) -> WebViewBuilder<'_> {
     b
 }
 
+/// New page views are created on top of the window's children; keep the chrome above them.
+#[cfg(windows)]
+fn raise_chrome(chrome: &WebView) {
+    use windows::Win32::{
+        Foundation::HWND,
+        UI::WindowsAndMessaging::{SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE},
+    };
+    use wry::WebViewExtWindows;
+    // SAFETY: z-order change of the chrome's own host window.
+    unsafe {
+        let mut hwnd = HWND::default();
+        if chrome.controller().ParentWindow(&mut hwnd).is_ok() {
+            let _ = SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+        }
+    }
+}
+
 /// Non-Windows builds exist only so CI can compile and test the shared logic.
 #[cfg(not(windows))]
-fn round_view(
-    _v: &WebView,
-    _r: R,
-    _scale: f64,
-    _key: usize,
-    _holes: &[(R, f64)],
-    _rounded: bool,
-    _cache: &mut HashMap<usize, (i32, i32, u64)>,
-) {
-}
+fn raise_chrome(_chrome: &WebView) {}
+
+/// Non-Windows builds exist only so CI can compile and test the shared logic.
+#[cfg(not(windows))]
+fn shape_chrome(_chrome: &WebView, _w: f64, _h: f64, _scale: f64, _cuts: &[R], _round: bool, _holes: &[(R, f64)]) {}
 
 /// HTML fullscreen (a video's fullscreen button, `requestFullscreen()`): WebView2 only fills its own
 /// view, so tell the app and let it take over the whole screen.
@@ -397,59 +409,57 @@ fn set_backdrop(_window: &Window, _on: bool, _dark: bool) -> bool {
     false
 }
 
-/// Corner radius (logical px) of the page views.
+/// Corner radius (logical px) of the page views; the chrome draws it (`wisp.cuts` in ui/chrome.html).
 const PAGE_RADIUS: f64 = 12.0;
 
+/// The chrome sits above the page views. Its window is shaped to everything except the page areas
+/// ("cuts"), so clicks reach the pages, but it keeps a small square at each page corner (where it
+/// draws a smooth, anti-aliased rounded corner over the page) and every open menu or dialog
+/// (`holes`), which it draws over the page with the page showing through around them.
 #[cfg(windows)]
-/// Clip a page webview's host window to a rounded rectangle (child windows are square by default),
-/// with optional rectangular holes. Holes let menus and dialogs drawn by the chrome show through
-/// "on top of" the page without hiding or moving it. `holes` are in window coordinates.
-fn round_view(v: &WebView, r: R, scale: f64, key: usize, holes: &[(R, f64)], rounded: bool, cache: &mut HashMap<usize, (i32, i32, u64)>) {
+fn shape_chrome(chrome: &WebView, w: f64, h: f64, scale: f64, cuts: &[R], round: bool, holes: &[(R, f64)]) {
+    use windows::Win32::{
+        Foundation::{BOOL, HWND},
+        Graphics::Gdi::{CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, HGDIOBJ, HRGN, RGN_DIFF, RGN_OR},
+    };
     use wry::WebViewExtWindows;
-    let (w, h) = ((r.w * scale).round() as i32, (r.h * scale).round() as i32);
-    let sig = holes.iter().fold(rounded as u64, |a, (h, rad)| {
-        [h.x, h.y, h.w, h.h, *rad]
-            .iter()
-            .fold(a, |a, f| (a ^ (*f as i64 as u64)).wrapping_mul(1099511628211))
-    });
-    if cache.get(&key) == Some(&(w, h, sig)) {
-        return;
-    }
-    cache.insert(key, (w, h, sig));
-    let d = (PAGE_RADIUS * 2.0 * scale).round() as i32;
-    // SAFETY: plain Win32 calls on the host window owned by this webview; regions are handed to the system.
+    let px = |v: f64| (v * scale).round() as i32;
+    // SAFETY: plain Win32 calls on the chrome's own host window; regions are handed to the system.
     unsafe {
-        use windows::Win32::{
-            Foundation::{BOOL, HWND},
-            Graphics::Gdi::{CombineRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, HGDIOBJ, HRGN, RGN_DIFF},
-        };
         let mut hwnd = HWND::default();
-        if v.controller().ParentWindow(&mut hwnd).is_ok() {
-            if !rounded {
-                // Full-screen pages: no clipping at all.
-                SetWindowRgn(hwnd, HRGN::default(), BOOL(1));
-                return;
-            }
-            let rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d);
-            for (ho, rad) in holes {
-                let (x0, y0) = (
-                    (((ho.x - r.x) * scale).floor() as i32).max(0),
-                    (((ho.y - r.y) * scale).floor() as i32).max(0),
-                );
-                let (x1, y1) = (
-                    (((ho.x + ho.w - r.x) * scale).ceil() as i32).min(w + 1),
-                    (((ho.y + ho.h - r.y) * scale).ceil() as i32).min(h + 1),
-                );
-                if x1 > x0 && y1 > y0 {
-                    // Same rounded shape as the menu drawn underneath, so no square edge shows around it.
-                    let rd = (rad * 2.0 * scale).round() as i32;
-                    let hr = CreateRoundRectRgn(x0, y0, x1 + 1, y1 + 1, rd, rd);
-                    CombineRgn(rgn, rgn, hr, RGN_DIFF);
-                    let _ = DeleteObject(HGDIOBJ(hr.0));
+        if chrome.controller().ParentWindow(&mut hwnd).is_err() {
+            return;
+        }
+        if cuts.is_empty() {
+            SetWindowRgn(hwnd, HRGN::default(), BOOL(1));
+            return;
+        }
+        let add = |rgn: HRGN, x0: i32, y0: i32, x1: i32, y1: i32, mode| {
+            let r = CreateRectRgn(x0, y0, x1, y1);
+            CombineRgn(rgn, rgn, r, mode);
+            let _ = DeleteObject(HGDIOBJ(r.0));
+        };
+        let rgn = CreateRectRgn(0, 0, px(w) + 1, px(h) + 1);
+        let c = px(PAGE_RADIUS) + 1;
+        for r in cuts {
+            // 1px inside the page edge: the chrome is transparent there, so no seam can open up.
+            let (x0, y0, x1, y1) = (px(r.x) + 1, px(r.y) + 1, px(r.x + r.w) - 1, px(r.y + r.h) - 1);
+            add(rgn, x0, y0, x1, y1, RGN_DIFF);
+            if round {
+                for (cx, cy) in [
+                    (x0 - 1, y0 - 1),
+                    (x1 + 1 - c, y0 - 1),
+                    (x0 - 1, y1 + 1 - c),
+                    (x1 + 1 - c, y1 + 1 - c),
+                ] {
+                    add(rgn, cx, cy, cx + c, cy + c, RGN_OR);
                 }
             }
-            SetWindowRgn(hwnd, rgn, BOOL(1));
         }
+        for (ho, _) in holes {
+            add(rgn, px(ho.x) - 1, px(ho.y) - 1, px(ho.x + ho.w) + 1, px(ho.y + ho.h) + 1, RGN_OR);
+        }
+        SetWindowRgn(hwnd, rgn, BOOL(1));
     }
 }
 
@@ -602,7 +612,8 @@ struct App {
     ai_web: Option<WebView>,
     ai_web_url: Option<String>,
     ai_web_hide: bool,
-    rounded: HashMap<usize, (i32, i32, u64)>,
+    /// Last chrome shape sent (page areas + menu rects), to skip redundant updates.
+    chrome_shape: String,
     holes: Vec<(R, f64)>,
     elem_fs: Option<usize>,
     pending: HashMap<String, Pending>,
@@ -872,7 +883,6 @@ impl App {
         let r = self.content();
         let show = self.overlays.is_empty() && !self.dragging;
         let cur = self.cur;
-        let scale = self.window.scale_factor();
         let full = self.page_full();
         let (ids, rects) = if full {
             (vec![self.spaces[cur].active], vec![r])
@@ -905,7 +915,6 @@ impl App {
                             if t.ready {
                                 let _ = v.set_visible(true);
                             }
-                            round_view(v, rects[i], scale, t.id, &self.holes, !full, &mut self.rounded);
                         }
                         _ => {
                             if !hold {
@@ -930,11 +939,32 @@ impl App {
             if want_web {
                 let _ = v.set_bounds(to_rect(wr));
                 let _ = v.set_visible(true);
-                round_view(v, wr, scale, usize::MAX, &self.holes, true, &mut self.rounded);
             } else {
                 let _ = v.set_visible(false);
             }
         }
+        // The chrome covers everything except the visible page areas.
+        let mut cuts: Vec<R> = if show { rects } else { vec![] };
+        if want_web {
+            cuts.push(wr);
+        }
+        self.update_chrome_shape(cuts, !full);
+    }
+
+    fn update_chrome_shape(&mut self, cuts: Vec<R>, round: bool) {
+        raise_chrome(&self.chrome);
+        let (w, h) = self.size();
+        let sig = format!("{cuts:?}{round}{:?}{w}x{h}", self.holes);
+        if sig == self.chrome_shape {
+            return;
+        }
+        self.chrome_shape = sig;
+        shape_chrome(&self.chrome, w, h, self.window.scale_factor(), &cuts, round, &self.holes);
+        let r: Vec<Value> = cuts.iter().map(|c| json!({"x":c.x,"y":c.y,"w":c.w,"h":c.h})).collect();
+        let js = json!({"r": r, "round": round, "radius": PAGE_RADIUS});
+        let _ = self
+            .chrome
+            .evaluate_script(&format!("window.wisp&&window.wisp.cuts&&window.wisp.cuts({js})"));
     }
 
     fn ai_web_rect(&self) -> R {
@@ -1279,7 +1309,6 @@ impl App {
     fn close(&mut self, id: usize) {
         let Some((si, ti)) = self.find_tab(id) else { return };
         let removed = self.spaces[si].tabs.remove(ti);
-        self.rounded.remove(&id);
         if let Some(v) = removed.view {
             self.bury(v);
         }
@@ -1686,6 +1715,7 @@ impl App {
                 }
             }
             "ready" => {
+                self.chrome_shape.clear();
                 self.refresh();
                 self.show_window();
             }
@@ -1901,7 +1931,7 @@ impl App {
             None
         });
         self.push_keys();
-        self.rounded.clear();
+        self.chrome_shape.clear();
         self.refresh();
     }
 
@@ -1962,7 +1992,7 @@ impl App {
             self.bury(v);
         }
         self.drop_spare();
-        self.rounded.clear();
+        self.chrome_shape.clear();
         self.refresh();
     }
 
@@ -2038,7 +2068,6 @@ impl App {
             t.block = None;
             t.loading = false;
             t.ready = false;
-            self.rounded.remove(&id);
             self.bury(v);
             self.push_state();
         }
@@ -2203,7 +2232,7 @@ impl App {
                     self.settings.side_collapsed = v.as_bool().unwrap_or(false);
                 }
                 store::save_settings(&self.settings);
-                self.rounded.clear();
+                self.chrome_shape.clear();
                 self.refresh();
                 return;
             }
@@ -2802,7 +2831,7 @@ fn main() {
         ai_web: None,
         ai_web_url: None,
         ai_web_hide: false,
-        rounded: HashMap::new(),
+        chrome_shape: String::new(),
         holes: vec![],
         elem_fs: None,
         pending: HashMap::new(),
