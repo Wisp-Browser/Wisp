@@ -120,11 +120,7 @@ body.collapsed .sect{display:none}
 .sbtn kbd{margin-left:auto;font:11px var(--font);color:var(--fg3)}
 body.collapsed .sbtn{justify-content:center;padding:0}body.collapsed .sbtn span,body.collapsed .sbtn kbd{display:none}
 
-/* page frame: a ring + soft shadow drawn just outside each page view */
-.ring{position:fixed;border-radius:13px;border:1px solid var(--line);border-top-color:var(--hi);background:var(--page);box-shadow:var(--shadow);z-index:1;pointer-events:none}
-#ring{left:calc(var(--cl) - 1px);top:calc(var(--ct) - 1px);right:calc(var(--rt) - 1px);bottom:7px}
-body.flat .ring{box-shadow:none}
-body.fs .ring,body.fs .row,body.fs #side{display:none}
+body.fs .row,body.fs #side{display:none}
 
 /* split */
 .dv{position:fixed;z-index:4;border-radius:4px;transition:background-color var(--dur) var(--ease)}
@@ -146,7 +142,6 @@ body.fs .ring,body.fs .row,body.fs #side{display:none}
 <div class="rz" data-d="ne" style="top:0;right:0;width:10px;height:10px;cursor:ne-resize"></div>
 <div class="rz" data-d="sw" style="bottom:0;left:0;width:10px;height:10px;cursor:sw-resize"></div>
 <div class="rz" data-d="se" style="bottom:0;right:0;width:10px;height:10px;cursor:se-resize"></div>
-<div id="ring" class="ring"></div><div id="rings"></div>
 <header id="row1" class="row"></header>
 <div id="row2" class="row"></div>
 <aside id="side" class="glass-s"></aside>
@@ -287,7 +282,7 @@ function render(){
   omniIcon(a);
   $('#back').disabled=!a||!a.back;$('#fwd').disabled=!a||!a.fwd;
   $('#unsplit').style.display=S.split?'flex':'none';
-  divs();rings();
+  divs();
 }
 let omniK='';function omniIcon(a){const u=(a&&a.url)||'',k=!u||u==='wisp://newtab'?'search':u.startsWith('https:')?'lock':'globe';if(k!==omniK){omniK=k;$('#oi').innerHTML=ico(k)}}
 let divSig='';
@@ -297,10 +292,6 @@ function divs(){const sig=JSON.stringify(S.divs||[]);if(sig===divSig)return;divS
   e.onpointermove=ev=>{if(!e.classList.contains('live')||raf)return;raf=requestAnimationFrame(()=>{raf=0;send({t:'div',col:d.col,idx:d.idx,pos:d.col?ev.clientX:ev.clientY});
     if(d.col)e.style.left=(ev.clientX-d.w/2)+'px';else e.style.top=(ev.clientY-d.h/2)+'px'})};
   e.onpointerup=()=>{e.classList.remove('live');divSig='';send({t:'divend'})};c.appendChild(e)})}
-// one ring per split pane (the single-page ring follows CSS variables, so it tracks the AI panel live)
-let ringSig='';
-function rings(){const p=S.split?(S.panes||[]):[],sig=JSON.stringify(p);$('#ring').style.display=S.split?'none':'';if(sig===ringSig)return;ringSig=sig;
-  $('#rings').innerHTML=p.map(r=>`<div class="ring" style="left:${r.x-1}px;top:${r.y-1}px;width:${r.w+2}px;height:${r.h+2}px"></div>`).join('')}
 // wallpaper (drawn behind the glass; Flat hides it)
 let lastWall='';
 function wall(nt){const cfg=nt||{},w=cfg.wall,key=JSON.stringify([w,cfg.blur,cfg.dim]);

@@ -397,7 +397,7 @@ fn set_backdrop(_window: &Window, _on: bool, _dark: bool) -> bool {
     false
 }
 
-/// Corner radius (logical px) of the page area; matches `.ring` in the chrome CSS.
+/// Corner radius (logical px) of the page views.
 const PAGE_RADIUS: f64 = 12.0;
 
 #[cfg(windows)]
