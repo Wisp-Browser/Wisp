@@ -1,17 +1,17 @@
 //! UIKit / WebKit side of Wisp for iOS.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use block2::{DynBlock, RcBlock};
-use objc2::rc::Retained;
-use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
-use objc2::{define_class, msg_send, ClassType, MainThreadMarker, MainThreadOnly};
+use objc2::rc::{Allocated, Retained};
+use objc2::runtime::{AnyClass, AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
+use objc2::{define_class, msg_send, ClassType, DefinedClass, MainThreadMarker, MainThreadOnly};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSDictionary, NSError, NSHomeDirectory, NSString, NSURLRequest, NSURL};
 use objc2_ui_kit::{
-    UIApplication, UIApplicationDelegate, UIBlurEffect, UIBlurEffectStyle, UIColor, UIPasteboard, UIScreen, UIView, UIViewController,
-    UIVisualEffectView, UIWindow,
+    UIApplication, UIApplicationDelegate, UIBlurEffect, UIBlurEffectStyle, UIColor, UIEdgeInsets, UIPasteboard, UIScreen, UIView,
+    UIViewAnimationOptions, UIViewController, UIVisualEffect, UIVisualEffectView, UIWindow,
 };
 use objc2_web_kit::{
     WKContentRuleList, WKContentRuleListStore, WKNavigation, WKNavigationAction, WKNavigationActionPolicy, WKNavigationDelegate,
@@ -19,14 +19,19 @@ use objc2_web_kit::{
     WKWebViewConfiguration, WKWebsiteDataStore, WKWindowFeatures,
 };
 
-use crate::core::{self, Session};
+use crate::core::{self, Changed, Session};
 use crate::omni;
 use crate::wk::WKWebView;
 
 const CHROME_HTML: &str = include_str!("../ui/chrome.html");
 const NEWTAB_HTML: &str = include_str!("../ui/newtab.html");
-/// Height of the bottom bar above the home-indicator area.
+/// Height of the bar, not counting the home-indicator / status-bar area.
 const BAR_H: f64 = 54.0;
+/// In the Glass style pages run under the floating bar; this much extra scroll room keeps their
+/// content clear of it.
+const PAGE_INSET: f64 = 52.0;
+/// Height the bookmarks bar adds next to the address bar.
+const BM_H: f64 = 44.0;
 const DESKTOP_UA: &str =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
 
@@ -52,9 +57,12 @@ fn ns(s: &str) -> Retained<NSString> {
 
 struct Browser {
     mtm: MainThreadMarker,
-    _window: Retained<UIWindow>,
+    window: Retained<UIWindow>,
     root: Retained<UIView>,
     effect: Retained<UIVisualEffectView>,
+    /// Full-screen holder of the interface that only takes touches inside the bar (or everywhere
+    /// while a sheet is open), so the interface never has to resize.
+    pass: Retained<PassView>,
     chrome: Retained<WKWebView>,
     /// Shared by every page view (scripts, message handler, blocker rules).
     page_ucc: Retained<WKUserContentController>,
@@ -67,6 +75,52 @@ struct Browser {
     rules: Option<Retained<WKContentRuleList>>,
     path: String,
     last_push: String,
+    /// The tab whose page is on screen (to cross-fade when it changes).
+    shown: u64,
+    /// Native glass shapes behind the interface's buttons and panels (Liquid Glass on iOS 26).
+    shapes: Vec<Shape>,
+    /// Where the bar takes touches, as measured by the interface.
+    hot_bar: Option<CGRect>,
+    /// The open sheet wants the full-screen blur behind it (the menu uses a glass panel instead).
+    blur: bool,
+}
+
+struct Shape {
+    view: Retained<UIVisualEffectView>,
+    on: bool,
+}
+
+/// Apple's Liquid Glass (`UIGlassEffect`, iOS 26) when available, otherwise the system blur.
+fn glass_effect(mtm: MainThreadMarker) -> Retained<UIVisualEffect> {
+    if let Some(cls) = AnyClass::get(c"UIGlassEffect") {
+        let e: Option<Retained<UIVisualEffect>> = unsafe { msg_send![cls, effectWithStyle: 0isize] };
+        if let Some(e) = e {
+            return e;
+        }
+    }
+    Retained::into_super(UIBlurEffect::effectWithStyle(UIBlurEffectStyle::SystemChromeMaterial, mtm))
+}
+
+fn set_corner(v: &UIView, r: f64) {
+    unsafe {
+        let layer: Retained<AnyObject> = msg_send![v, layer];
+        let _: () = msg_send![&*layer, setCornerRadius: r];
+        let _: () = msg_send![&*layer, setCornerCurve: &*ns("continuous")];
+    }
+}
+
+fn spring(mtm: MainThreadMarker, secs: f64, f: impl Fn() + 'static) {
+    let anim = RcBlock::new(f);
+    UIView::animateWithDuration_delay_usingSpringWithDamping_initialSpringVelocity_options_animations_completion(
+        secs,
+        0.0,
+        0.86,
+        0.0,
+        UIViewAnimationOptions::AllowUserInteraction | UIViewAnimationOptions::BeginFromCurrentState,
+        &anim,
+        None,
+        mtm,
+    );
 }
 
 thread_local! {
@@ -80,25 +134,139 @@ fn with<R>(f: impl FnOnce(&mut Browser) -> R) -> Option<R> {
 }
 
 impl Browser {
+    fn top_bar(&self) -> bool {
+        self.s.settings.bar == "top"
+    }
+
+    /// The bar, including the status-bar (top) or home-indicator (bottom) area.
+    fn bar_rect(&self) -> CGRect {
+        let b = self.root.bounds();
+        let i = self.root.safeAreaInsets();
+        let bm = if self.s.bmbar_shown() { BM_H } else { 0.0 };
+        if self.top_bar() {
+            rect(0.0, 0.0, b.size.width, i.top + BAR_H + bm)
+        } else {
+            let h = BAR_H + bm + i.bottom;
+            rect(0.0, b.size.height - h, b.size.width, h)
+        }
+    }
+
     fn page_frame(&self) -> CGRect {
         let b = self.root.bounds();
-        let bar = BAR_H + self.root.safeAreaInsets().bottom;
-        rect(0.0, 0.0, b.size.width, (b.size.height - bar).max(0.0))
+        if self.s.settings.glass {
+            return b;
+        }
+        let bar = self.bar_rect().size.height;
+        let h = (b.size.height - bar).max(0.0);
+        rect(0.0, if self.top_bar() { bar } else { 0.0 }, b.size.width, h)
     }
 
     fn layout(&mut self) {
         let b = self.root.bounds();
-        let bar = BAR_H + self.root.safeAreaInsets().bottom;
-        let cf = if self.full {
+        self.pass.setFrame(b);
+        self.chrome.setFrame(b);
+        let area = if self.full {
             b
         } else {
-            rect(0.0, b.size.height - bar, b.size.width, bar)
+            self.hot_bar.unwrap_or_else(|| self.bar_rect())
         };
-        self.effect.setFrame(cf);
-        self.chrome.setFrame(cf);
+        self.pass.ivars().hot.set(area);
+        self.effect.setFrame(b);
         let pf = self.page_frame();
         for v in self.views.values() {
             v.setFrame(pf);
+            self.inset_page(v);
+        }
+    }
+
+    /// Extra scroll room so page content can scroll clear of the floating glass bar.
+    fn inset_page(&self, v: &WKWebView) {
+        let bm = if self.s.bmbar_shown() { BM_H } else { 0.0 };
+        let extra = if self.s.settings.glass { PAGE_INSET + bm } else { 0.0 };
+        let top = self.top_bar();
+        let i = UIEdgeInsets {
+            top: if top { extra } else { 0.0 },
+            left: 0.0,
+            bottom: if top { 0.0 } else { extra },
+            right: 0.0,
+        };
+        let sv = unsafe { v.scrollView() };
+        sv.setContentInset(i);
+        sv.setVerticalScrollIndicatorInsets(i);
+    }
+
+    /// Place the native glass shapes (screen rects + corner radius) the interface asked for.
+    /// Existing shapes glide to their new place, new ones fade in, unused ones fade out.
+    fn set_shapes(&mut self, rects: &[[f64; 5]], hot: Option<CGRect>) {
+        self.hot_bar = hot;
+        if !self.full {
+            if let Some(h) = hot {
+                self.pass.ivars().hot.set(h);
+            }
+        }
+        for (i, r) in rects.iter().enumerate() {
+            let f = rect(r[0], r[1], r[2], r[3]);
+            let radius = r[4].min(r[2] / 2.0).min(r[3] / 2.0).max(0.0);
+            if i == self.shapes.len() {
+                let v = UIVisualEffectView::initWithEffect(UIVisualEffectView::alloc(self.mtm), Some(&glass_effect(self.mtm)));
+                v.setClipsToBounds(true);
+                v.setUserInteractionEnabled(false);
+                v.setAlpha(0.0);
+                self.root.insertSubview_belowSubview(&v, &self.pass);
+                self.shapes.push(Shape { view: v, on: false });
+            }
+            let sh = &mut self.shapes[i];
+            let v = sh.view.clone();
+            if sh.on {
+                spring(self.mtm, 0.36, move || {
+                    v.setFrame(f);
+                    set_corner(&v, radius);
+                });
+            } else {
+                sh.on = true;
+                v.setFrame(f);
+                set_corner(&v, radius);
+                spring(self.mtm, 0.25, move || v.setAlpha(1.0));
+            }
+        }
+        for sh in self.shapes.iter_mut().skip(rects.len()).filter(|s| s.on) {
+            sh.on = false;
+            let v = sh.view.clone();
+            spring(self.mtm, 0.2, move || v.setAlpha(0.0));
+        }
+    }
+
+    /// Open or close a sheet. Sheets that want it get a full-screen blur, which fades in and out.
+    fn set_full(&mut self, full: bool, blur: bool) {
+        self.full = full;
+        self.blur = blur;
+        let area = if full {
+            self.root.bounds()
+        } else {
+            self.hot_bar.unwrap_or_else(|| self.bar_rect())
+        };
+        self.pass.ivars().hot.set(area);
+        let target = if full && blur && self.s.settings.glass { 1.0 } else { 0.0 };
+        let effect = self.effect.clone();
+        spring(self.mtm, if full { 0.3 } else { 0.22 }, move || effect.setAlpha(target));
+    }
+
+    fn apply_theme(&self) {
+        let style: isize = match self.s.settings.theme.as_str() {
+            "light" => 1,
+            "dark" => 2,
+            _ => 0,
+        };
+        let _: () = unsafe { msg_send![&*self.window, setOverrideUserInterfaceStyle: style] };
+    }
+
+    /// Restyle New Tab pages that are open.
+    fn restyle_newtabs(&self) {
+        let js = format!("window.wispCfg&&wispCfg({})", self.s.settings.newtab());
+        for t in self.s.tabs.iter().filter(|t| t.url.is_empty()) {
+            if let Some(v) = self.views.get(&t.id) {
+                unsafe { v.evaluateJavaScript_completionHandler(&ns(&js), None) };
+            }
         }
     }
 
@@ -133,11 +301,12 @@ impl Browser {
         }
         wv.setHidden(true);
         self.root.insertSubview_belowSubview(&wv, &self.effect);
+        self.inset_page(&wv);
         let (url, desktop) = self.s.tab(id).map(|t| (t.url.clone(), t.desktop)).unwrap_or_default();
         if desktop {
             unsafe { wv.setCustomUserAgent(Some(&ns(DESKTOP_UA))) };
         }
-        load(&wv, &url);
+        load(&wv, &url, &self.s.settings);
         self.views.insert(id, wv);
     }
 
@@ -154,12 +323,42 @@ impl Browser {
                 v.removeFromSuperview();
             }
         }
-        for (tid, v) in &self.views {
-            v.setHidden(*tid != id);
+        let changed = self.shown != id && self.shown != 0;
+        self.shown = id;
+        match (changed, self.views.get(&id).cloned()) {
+            // Cross-fade: the new page fades in on top, the old one hides once it's covered.
+            (true, Some(v)) => {
+                self.root.insertSubview_belowSubview(&v, &self.effect);
+                v.setAlpha(0.0);
+                v.setHidden(false);
+                let fade = v.clone();
+                let anim = RcBlock::new(move || fade.setAlpha(1.0));
+                let done = RcBlock::new(|_finished: objc2::runtime::Bool| {
+                    with(|b| b.hide_others());
+                });
+                UIView::animateWithDuration_delay_options_animations_completion(
+                    0.18,
+                    0.0,
+                    UIViewAnimationOptions::AllowUserInteraction | UIViewAnimationOptions::CurveEaseOut,
+                    &anim,
+                    Some(&done),
+                    self.mtm,
+                );
+            }
+            _ => self.hide_others(),
         }
         self.layout();
         self.push();
         self.save();
+    }
+
+    fn hide_others(&self) {
+        for (tid, v) in &self.views {
+            v.setHidden(*tid != self.shown);
+            if *tid == self.shown {
+                v.setAlpha(1.0);
+            }
+        }
     }
 
     fn navigate(&mut self, url: String) {
@@ -168,7 +367,7 @@ impl Browser {
             t.url = url.clone();
         }
         match self.views.get(&id) {
-            Some(v) => load(v, &url),
+            Some(v) => load(v, &url, &self.s.settings),
             None => self.make_view(id),
         }
         self.show();
@@ -256,9 +455,46 @@ impl Browser {
                 };
                 self.show();
             }
-            "mode" => {
-                self.full = m["full"].as_bool().unwrap_or(false);
+            "mode" => self.set_full(m["full"].as_bool().unwrap_or(false), m["blur"].as_bool().unwrap_or(true)),
+            "shapes" => {
+                let nums = |v: &serde_json::Value| -> Vec<f64> {
+                    v.as_array()
+                        .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect())
+                        .unwrap_or_default()
+                };
+                let rects: Vec<[f64; 5]> = m["r"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .map(nums)
+                            .filter(|r| r.len() == 5)
+                            .map(|r| [r[0], r[1], r[2], r[3], r[4]])
+                            .take(16)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let h = nums(&m["hot"]);
+                let hot = (h.len() == 4).then(|| rect(h[0], h[1], h[2], h[3]));
+                self.set_shapes(&rects, hot);
+            }
+            "bookmark" => {
+                self.s.toggle_bookmark();
                 self.layout();
+                self.save();
+                self.push();
+            }
+            "unbookmark" => {
+                self.s.remove_bookmark(&s("url"));
+                self.layout();
+                self.save();
+                self.push();
+            }
+            // A bookmark chip: open it in the current tab.
+            "open" => {
+                let u = s("url");
+                if u.starts_with("http") {
+                    self.navigate(u);
+                }
             }
             "copy" => {
                 if let Some(t) = self.s.tab(self.s.active) {
@@ -280,16 +516,19 @@ impl Browser {
                 self.push();
             }
             "set" => {
-                match s("k").as_str() {
-                    "engine" => self.s.settings.engine = omni::engine_by_id(&s("v")).id.to_string(),
-                    "blocker" => {
-                        self.s.settings.blocker = m["v"].as_bool().unwrap_or(true);
+                match self.s.settings.set(&s("k"), &m["v"]) {
+                    Changed::Nothing => return,
+                    Changed::Plain => {}
+                    Changed::Blocker => {
                         self.apply_rules();
                         if let Some(v) = active {
                             unsafe { v.reload() };
                         }
                     }
-                    _ => {}
+                    Changed::Theme => self.apply_theme(),
+                    // Glass on/off and bar position: pages and touch areas move.
+                    Changed::Layout => self.layout(),
+                    Changed::Look => self.restyle_newtabs(),
                 }
                 self.save();
                 self.push();
@@ -349,10 +588,11 @@ impl Browser {
     }
 }
 
-fn load(wv: &WKWebView, url: &str) {
+fn load(wv: &WKWebView, url: &str, settings: &core::Settings) {
     unsafe {
         if url.is_empty() {
-            wv.loadHTMLString_baseURL(&ns(NEWTAB_HTML), None);
+            let html = NEWTAB_HTML.replacen("/*WISP_CFG*/", &format!("window.WISP_CFG={};", settings.newtab()), 1);
+            wv.loadHTMLString_baseURL(&ns(&html), None);
         } else if let Some(u) = NSURL::URLWithString(&ns(url)) {
             wv.loadRequest(&NSURLRequest::requestWithURL(&u));
         }
@@ -468,6 +708,43 @@ define_class!(
     }
 );
 
+pub struct PassIvars {
+    /// Where the interface takes touches (the bar, or everything while a sheet is open).
+    hot: Cell<CGRect>,
+}
+
+define_class!(
+    // SAFETY: UIView subclass; ivars are plain data, no Drop impl.
+    #[unsafe(super(UIView))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "WispPassView"]
+    #[ivars = PassIvars]
+    struct PassView;
+
+    unsafe impl NSObjectProtocol for PassView {}
+
+    impl PassView {
+        /// Touches outside the hot area fall through to the page underneath.
+        #[unsafe(method(hitTest:withEvent:))]
+        fn hit_test(&self, p: CGPoint, ev: *mut AnyObject) -> *mut UIView {
+            let r = self.ivars().hot.get();
+            let inside = p.x >= r.origin.x && p.x < r.origin.x + r.size.width && p.y >= r.origin.y && p.y < r.origin.y + r.size.height;
+            if !inside {
+                return std::ptr::null_mut();
+            }
+            unsafe { msg_send![super(self), hitTest: p, withEvent: ev] }
+        }
+    }
+);
+
+impl PassView {
+    fn new(mtm: MainThreadMarker, frame: CGRect) -> Retained<Self> {
+        let this: Allocated<Self> = Self::alloc(mtm);
+        let this = this.set_ivars(PassIvars { hot: Cell::new(frame) });
+        unsafe { msg_send![super(this), initWithFrame: frame] }
+    }
+}
+
 define_class!(
     // SAFETY: plain UIViewController subclass without ivars or Drop.
     #[unsafe(super(UIViewController))]
@@ -546,6 +823,8 @@ fn start(mtm: MainThreadMarker) {
     // Interface: system blur with a transparent web view on top.
     let blur = UIBlurEffect::effectWithStyle(UIBlurEffectStyle::SystemChromeMaterial, mtm);
     let effect = UIVisualEffectView::initWithEffect(UIVisualEffectView::alloc(mtm), Some(&**blur));
+    effect.setAlpha(0.0);
+    effect.setUserInteractionEnabled(false);
     root.addSubview(&effect);
     let chrome_ucc = unsafe { WKUserContentController::new(mtm) };
     let chrome_cfg = unsafe { WKWebViewConfiguration::new(mtm) };
@@ -553,6 +832,8 @@ fn start(mtm: MainThreadMarker) {
         chrome_ucc.addScriptMessageHandler_name(ProtocolObject::from_ref(&*delegate), &ns("wisp"));
         chrome_cfg.setUserContentController(&chrome_ucc);
     }
+    let pass = PassView::new(mtm, root.bounds());
+    pass.setBackgroundColor(Some(&UIColor::clearColor()));
     let chrome = unsafe { WKWebView::initWithFrame_configuration(WKWebView::alloc(mtm), root.bounds(), &chrome_cfg) };
     chrome.setOpaque(false);
     chrome.setBackgroundColor(Some(&UIColor::clearColor()));
@@ -561,19 +842,23 @@ fn start(mtm: MainThreadMarker) {
         sv.setBackgroundColor(Some(&UIColor::clearColor()));
         let _: () = msg_send![&*sv, setScrollEnabled: false];
         let _: () = msg_send![&*sv, setBounces: false];
+        // Leave "tap the status bar to scroll to top" to the page.
+        let _: () = msg_send![&*sv, setScrollsToTop: false];
         // The interface handles safe areas itself (env(safe-area-inset-*)).
         let _: () = msg_send![&*sv, setContentInsetAdjustmentBehavior: 2isize];
         chrome.loadHTMLString_baseURL(&ns(CHROME_HTML), None);
     }
-    root.addSubview(&chrome);
+    pass.addSubview(&chrome);
+    root.addSubview(&pass);
 
     let path = format!("{}/Documents/wisp.json", NSHomeDirectory());
     let s = Session::load(&std::fs::read_to_string(&path).unwrap_or_default());
     let b = Browser {
         mtm,
-        _window: window.clone(),
+        window: window.clone(),
         root,
         effect,
+        pass,
         chrome,
         page_ucc,
         page_cfg,
@@ -584,9 +869,16 @@ fn start(mtm: MainThreadMarker) {
         rules: None,
         path,
         last_push: String::new(),
+        shown: 0,
+        shapes: vec![],
+        hot_bar: None,
+        blur: false,
     };
     B.with(|cell| *cell.borrow_mut() = Some(b));
-    with(|b| b.show());
+    with(|b| {
+        b.apply_theme();
+        b.show();
+    });
     window.makeKeyAndVisible();
     compile_blocker(mtm);
 }

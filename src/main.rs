@@ -60,6 +60,7 @@ const NEWTAB_ID: &str = "wisp://newtab";
 const CONTENT_PAD: f64 = 8.0;
 const TOP_CLASSIC: f64 = 86.0; // tab strip (40) + toolbar (44) + gap
 const TOP_SLIM: f64 = 48.0; // one 46px row (Compact, Vertical) + gap
+const BMBAR_H: f64 = 32.0; // bookmarks bar under the toolbar
 const SIDE_W: f64 = 232.0; // Vertical: tab sidebar
 const SIDE_W_MIN: f64 = 52.0; // Vertical: collapsed sidebar
 const AI_HEAD: f64 = 92.0; // height of the AI panel header (mirrored in ui/ai.css)
@@ -82,8 +83,8 @@ impl Lay {
 }
 
 /// Where page views go for a window of `w`×`h` (before the AI panel takes its share on the right).
-fn content_rect(lay: Lay, collapsed: bool, w: f64, h: f64, right: f64) -> R {
-    let top = if lay == Lay::Classic { TOP_CLASSIC } else { TOP_SLIM };
+fn content_rect(lay: Lay, collapsed: bool, bmbar: bool, w: f64, h: f64, right: f64) -> R {
+    let top = if lay == Lay::Classic { TOP_CLASSIC } else { TOP_SLIM } + if bmbar { BMBAR_H } else { 0.0 };
     let left = match lay {
         Lay::Vertical => CONTENT_PAD + if collapsed { SIDE_W_MIN } else { SIDE_W } + CONTENT_PAD,
         _ => CONTENT_PAD,
@@ -770,7 +771,7 @@ impl App {
             return R { x: 0.0, y: 0.0, w, h };
         }
         let right = CONTENT_PAD + if self.ai_open { self.ai_w + 8.0 } else { 0.0 };
-        content_rect(self.lay(), self.settings.side_collapsed, w, h, right)
+        content_rect(self.lay(), self.settings.side_collapsed, self.bmbar_shown(), w, h, right)
     }
     fn lay(&self) -> Lay {
         Lay::parse(&self.settings.layout)
@@ -1352,6 +1353,7 @@ impl App {
             "accent":self.settings.accent,"glass":self.settings.glass,"perf":self.settings.perf,"nt":s.nt,
             "layout":self.settings.layout,"glass_on":self.settings.glass_on,"glass_ok":self.glass_ok,
             "collapsed":self.settings.side_collapsed,"setup":self.settings.setup,"font":self.settings.font,
+            "bmbar":self.settings.bmbar,"bms":self.lib.bookmarks.iter().take(80).map(|b| json!({"url":b.url,"title":b.title})).collect::<Vec<_>>(),
             "ai":{"open":self.ai_open,"w":self.ai_w,"keys":self.keys,"cfg":self.settings.ai},
             "private":store::is_private(),"version":env!("CARGO_PKG_VERSION"),"fullscreen":self.fullscreen,
             "s":{"suggest":self.settings.suggest,"blocker":self.settings.blocker,"https_only":self.settings.https_only,
@@ -1402,6 +1404,17 @@ impl App {
                 self.last_saved = j;
             }
         }
+    }
+
+    /// The bookmarks bar is on screen (setting on, and there is something to show).
+    fn bmbar_shown(&self) -> bool {
+        self.settings.bmbar && !self.lib.bookmarks.is_empty()
+    }
+
+    /// Bookmarks were added or removed: the bar may appear or disappear, which moves the pages.
+    fn bookmarks_changed(&mut self) {
+        self.chrome_shape.clear();
+        self.refresh();
     }
 
     fn refresh(&mut self) {
@@ -1684,7 +1697,7 @@ impl App {
                     let (u, ti) = (t.url.clone(), t.title.clone());
                     let on = self.lib.toggle_bookmark(&u, &ti);
                     self.toast(if on { "Bookmark added" } else { "Bookmark removed" });
-                    self.push_state();
+                    self.bookmarks_changed();
                 }
             }
             "bm_del" => {
@@ -1692,7 +1705,7 @@ impl App {
                 self.lib.bookmarks.retain(|b| b.url != u);
                 self.lib.save_bookmarks();
                 self.lib_query("bookmarks", &s("q"));
-                self.push_state();
+                self.bookmarks_changed();
             }
             "hist_del" => {
                 let u = s("url");
@@ -2436,6 +2449,12 @@ impl App {
                 return;
             }
             "setup_done" => self.settings.setup = false,
+            "bmbar" => {
+                self.settings.bmbar = v.as_bool().unwrap_or(true);
+                store::save_settings(&self.settings);
+                self.bookmarks_changed();
+                return;
+            }
             "font" => {
                 let f = v.as_str().unwrap_or("inter");
                 self.settings.font = if matches!(f, "inter" | "rounded" | "system" | "serif" | "mono") {
@@ -2679,7 +2698,7 @@ impl App {
                 Ok(items) => {
                     let n = self.lib.import(items);
                     self.toast(&format!("Imported {n} bookmark{}", if n == 1 { "" } else { "s" }));
-                    self.push_state();
+                    self.bookmarks_changed();
                     self.chrome_emit(json!({"type":"imported","n":n}));
                 }
                 Err(e) => self.toast(&e),
@@ -3143,16 +3162,16 @@ mod tests {
     #[test]
     fn layout_content_rects() {
         // Mirrors ui/chrome.html: --ct (content top), --cl (content left), 8px gutters.
-        let r = content_rect(Lay::Classic, false, 1280.0, 800.0, CONTENT_PAD);
+        let r = content_rect(Lay::Classic, false, false, 1280.0, 800.0, CONTENT_PAD);
         assert_eq!((r.x, r.y, r.w, r.h), (8.0, 86.0, 1264.0, 706.0));
-        let r = content_rect(Lay::Compact, false, 1280.0, 800.0, CONTENT_PAD);
+        let r = content_rect(Lay::Compact, false, false, 1280.0, 800.0, CONTENT_PAD);
         assert_eq!((r.x, r.y), (8.0, 48.0));
-        let r = content_rect(Lay::Vertical, false, 1280.0, 800.0, CONTENT_PAD);
+        let r = content_rect(Lay::Vertical, false, false, 1280.0, 800.0, CONTENT_PAD);
         assert_eq!((r.x, r.y, r.w), (248.0, 48.0, 1024.0));
-        let r = content_rect(Lay::Vertical, true, 1280.0, 800.0, CONTENT_PAD);
+        let r = content_rect(Lay::Vertical, true, false, 1280.0, 800.0, CONTENT_PAD);
         assert_eq!(r.x, 68.0);
         // The AI panel takes its share on the right.
-        let r = content_rect(Lay::Classic, false, 1280.0, 800.0, CONTENT_PAD + 380.0 + 8.0);
+        let r = content_rect(Lay::Classic, false, false, 1280.0, 800.0, CONTENT_PAD + 380.0 + 8.0);
         assert_eq!(r.w, 1280.0 - 8.0 - 396.0);
         assert_eq!(Lay::parse("nonsense"), Lay::Classic);
     }

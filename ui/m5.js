@@ -34,7 +34,7 @@ const CMDS=[
  ['find','Find in page','ctrl+f',()=>openFind()],['findnext','Find next','f3',()=>findStep('next')],['findprev','Find previous','shift+f3',()=>findStep('prev')],
  ['zoomin','Zoom in','ctrl+=',()=>act('zoom',{d:1})],['zoomout','Zoom out','ctrl+-',()=>act('zoom',{d:-1})],['zoomreset','Reset zoom','ctrl+0',()=>act('zoom',{d:0})],
  ['reader','Reader mode','ctrl+shift+r',()=>act('reader')],['bookmark','Bookmark this page','ctrl+d',()=>act('bm_toggle')],
- ['history','History','ctrl+h',()=>openLib('history')],['bookmarks','Bookmarks','ctrl+shift+o',()=>openLib('bookmarks')],
+ ['history','History','ctrl+h',()=>openLib('history')],['bmbar','Show or hide the bookmarks bar','',()=>act('set',{k:'bmbar',v:!S.bmbar})],['bookmarks','Bookmarks','ctrl+shift+o',()=>openLib('bookmarks')],
  ['downloads','Downloads','ctrl+shift+j',()=>openLib('downloads')],['settings','Settings','ctrl+,',()=>openSettings()],
  ['private','New private window','ctrl+shift+n',()=>act('private')],['fullscreen','Toggle fullscreen','f11',()=>act('fullscreen')],
  ['print','Print page','ctrl+p',()=>act('print')],['siteblock','Toggle ad blocker on this site','ctrl+shift+b',()=>act('site_blocker')],
@@ -221,6 +221,7 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
   <h5>Layout</h5><div class="pvs">${layCards()}</div>
   <h5>Glass effects</h5><div class="pvs">${glassCards()}</div>${glassNote()}
   <h5>Font</h5><div class="pvs">${fontCards()}</div>
+  ${row('Bookmarks bar','Your bookmarks under the address bar. Shown once you have at least one bookmark.',`<button class="sw2 ${S.bmbar?'on':''}" id="bmbartg" role="switch"><i></i></button>`)}
   <h5>Wallpaper</h5>${row('Wallpaper, accent colour and widgets','Set these in Customize on the New Tab page. They are saved per space.',`<button class="pbtn" data-act="newtab">Open a New Tab</button>`)}`;
  if(setSec==='privacy')h=`<h2>Privacy & security</h2>
   ${row('Ad & tracker blocker','Blocks ad and tracking requests using filter lists, and hides common ad boxes.',tg(s.blocker,'blocker'))}
@@ -245,6 +246,7 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
  const b=$('#setm');wireLook(b);b.querySelectorAll('[data-sec]').forEach(x=>x.onclick=()=>{setSec=x.dataset.sec;capturing=null;if(setSec==='bookmarks')act('sources');renderSettings()});
  $('#setx').onclick=closeSettings;
  b.querySelectorAll('[data-set]').forEach(x=>x.onclick=()=>{act('set',{k:x.dataset.set,v:!s[x.dataset.set]})});
+ const bt=$('#bmbartg');if(bt)bt.onclick=()=>act('set',{k:'bmbar',v:!S.bmbar});
  b.querySelectorAll('[data-eng]').forEach(x=>x.onclick=()=>act('engine',{id:x.dataset.eng}));
  b.querySelectorAll('[data-hib]').forEach(x=>x.onclick=()=>act('set',{k:'hibernate_s',v:+x.dataset.hib}));
  b.querySelectorAll('[data-ch]').forEach(x=>x.onclick=()=>act('set',{k:'channel',v:x.dataset.ch}));
@@ -279,5 +281,5 @@ function event(e){switch(e.type){
  case'update_ready':updMsg='Version '+e.version+' is ready.';stickyToast('Update '+e.version+' ready',"Restart",()=>act('update_apply'));renderSettings();break;
  case'pageclick':closePop();closeSugg();if($('#palm').classList.contains('open'))palette(false);if($('#libm').classList.contains('open'))closeLib();if($('#setm').classList.contains('open')&&!capturing)closeSettings();if($('#spmodal')&&$('#spmodal').classList.contains('open'))$('#spmodal').classList.remove('open');$('#ctx').classList.remove('open');$('#spm').classList.remove('open');break;
  case'imported':if($('#libm').classList.contains('open'))reqLib();break}}
-window.M5={inset,state,event,relayout,openSettings,key:c=>{if(c==='escape'&&S&&S.fullscreen){act('fullscreen');return}runCombo(c)},palette:()=>palette(true)};
+window.M5={inset,state,event,relayout,openSettings,lib:openLib,key:c=>{if(c==='escape'&&S&&S.fullscreen){act('fullscreen');return}runCombo(c)},palette:()=>palette(true)};
 })();

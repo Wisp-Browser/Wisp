@@ -6,6 +6,22 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-20
+
+### Added
+- Bookmarks bar under the address bar, in every layout. Click opens a bookmark in the tab, and
+  middle- or Ctrl-click opens it in a new tab. Scroll it sideways with the wheel. It shows once you
+  have a bookmark, and can be switched off in Settings → Appearance.
+- **Wisp for iPhone and iPad (preview)**, attached to each release as `Wisp-<version>-iOS.ipa`. It's
+  a native Rust app on iOS's WebKit engine:
+  - First-run setup: theme, layout (bottom or top bar), glass or flat, font, accent colour.
+  - Customization in Settings: New Tab wallpaper, clock and shortcuts, search engine, ad blocker.
+  - Apple's Liquid Glass (iOS 26) behind the bar buttons and menu; the system blur on older iOS.
+  - A bookmarks bar, tab grid, full-screen search and a content blocker.
+
+### Fixed
+- New Tab: gradient wallpaper swatches no longer show a frame at their edges.
+
 ## [0.2.3] - 2026-11-20
 
 Includes everything from 0.2.2-beta.1 and 0.2.2-beta.2 (smooth corners, Settings clipping fix,

@@ -2,10 +2,15 @@
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>New Tab</title>
+<script>/*WISP_CFG*/</script>
 <style>
 :root{--accent:#5e5ce6;--fg:#fff;--glass:rgba(255,255,255,.12);--line:rgba(255,255,255,.18);color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;min-height:100%;font:15px/1.35 -apple-system,system-ui,sans-serif;color:var(--fg)}
+html,body{margin:0;min-height:100%;font:15px/1.35 var(--font,-apple-system,system-ui,sans-serif);color:var(--fg)}
+body.f-rounded{--font:ui-rounded,-apple-system,sans-serif}body.f-serif{--font:ui-serif,Georgia,serif}body.f-mono{--font:ui-monospace,Menlo,monospace}
+body.noclock .clock,body.noclock .hi,body.nodial .dial{display:none}
+body.wl{--fg:#15131f;--glass:rgba(255,255,255,.6);--line:rgba(20,20,40,.1)}body.wd{--fg:#fff;--glass:rgba(255,255,255,.12);--line:rgba(255,255,255,.18)}
+body.walled{background:var(--wall)!important;background-attachment:fixed!important}
 body{background:radial-gradient(120% 80% at 15% 0%,#3b2a7a 0%,transparent 60%),radial-gradient(100% 70% at 100% 100%,#7a2a4f 0%,transparent 55%),#14121f;min-height:100vh;
  display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top) + 9vh) 20px 30px}
 @media (prefers-color-scheme:light){:root{--fg:#15131f;--glass:rgba(255,255,255,.6);--line:rgba(20,20,40,.1);color-scheme:light}
@@ -40,6 +45,14 @@ input::placeholder{color:var(--fg);opacity:.6}
 const pad=n=>String(n).padStart(2,'0');
 function tick(){const d=new Date(),h=d.getHours();document.getElementById('clock').textContent=(h%12||12)+':'+pad(d.getMinutes());
  document.getElementById('hi').textContent=h<5?'Good night':h<12?'Good morning':h<18?'Good afternoon':'Good evening'}
+// Look from Wisp (Settings → New Tab, font): set before first paint and updated live.
+function wispCfg(c){if(!c)return;const b=document.body.classList;['rounded','serif','mono'].forEach(f=>b.toggle('f-'+f,c.font===f));
+ b.toggle('noclock',c.clock===false);b.toggle('nodial',c.dial===false);b.toggle('walled',!!c.wall);
+ if(c.wall)document.body.style.setProperty('--wall',c.wall);
+ // Text colour follows the wallpaper's brightness (average of its colours).
+ const hx=(c.wall||'').match(/#[0-9a-f]{6}/gi)||[];const L=hx.length?hx.reduce((a,h)=>{const n=parseInt(h.slice(1),16);return a+(.299*(n>>16&255)+.587*(n>>8&255)+.114*(n&255))/255},0)/hx.length:-1;
+ b.toggle('wl',L>.6);b.toggle('wd',L>=0&&L<=.6);if(c.accent)document.documentElement.style.setProperty('--accent',c.accent)}
+wispCfg(window.WISP_CFG);
 tick();
 // Wakes once a minute, on the minute, and only while the page is visible.
 let tm=0;const arm=()=>{clearTimeout(tm);if(!document.hidden)tm=setTimeout(()=>{tick();arm()},60000-Date.now()%60000)};arm();

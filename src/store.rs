@@ -81,6 +81,8 @@ pub struct Settings {
     pub setup: bool,
     /// Interface font: "inter" | "rounded" | "system" | "serif" | "mono".
     pub font: String,
+    /// Bookmarks bar under the toolbar (shown when there are bookmarks).
+    pub bmbar: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -106,6 +108,7 @@ impl Default for Settings {
             side_collapsed: false,
             setup: false,
             font: "inter".into(),
+            bmbar: true,
         }
     }
 }

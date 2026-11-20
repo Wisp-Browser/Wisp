@@ -16,6 +16,23 @@ pub const MAX_LIVE: usize = 3;
 pub struct Settings {
     pub engine: String,
     pub blocker: bool,
+    /// "system" | "light" | "dark"
+    pub theme: String,
+    /// Where the bar sits: "bottom" | "top"
+    pub bar: String,
+    /// Frosted glass (system blur) or Flat (solid surfaces).
+    pub glass: bool,
+    /// "system" | "rounded" | "serif" | "mono" (all built into iOS)
+    pub font: String,
+    pub accent: String,
+    /// New Tab background (a CSS background); empty = Wisp's default.
+    pub wall: String,
+    pub clock: bool,
+    pub dial: bool,
+    /// Show the bookmarks bar next to the address bar (when there are bookmarks).
+    pub bmbar: bool,
+    /// The first-run setup has been completed.
+    pub setup_done: bool,
 }
 
 impl Default for Settings {
@@ -23,7 +40,116 @@ impl Default for Settings {
         Self {
             engine: "ddg".into(),
             blocker: true,
+            theme: "system".into(),
+            bar: "bottom".into(),
+            glass: true,
+            font: "system".into(),
+            accent: "#5e5ce6".into(),
+            wall: String::new(),
+            clock: true,
+            dial: true,
+            bmbar: true,
+            setup_done: false,
         }
+    }
+}
+
+/// What changed when a setting was applied, so the app redoes only that part.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Changed {
+    Nothing,
+    /// Engine, blocker or other values only the interface shows.
+    Plain,
+    Blocker,
+    Theme,
+    /// Bar position or glass: the native layout changes.
+    Layout,
+    /// Font, accent, New Tab look: the interface and New Tab pages restyle.
+    Look,
+}
+
+fn one_of(v: &Value, allowed: &[&str]) -> Option<String> {
+    v.as_str().filter(|s| allowed.contains(s)).map(String::from)
+}
+
+impl Settings {
+    /// Apply one setting from the interface, validated. Unknown keys and bad values are ignored.
+    pub fn set(&mut self, k: &str, v: &Value) -> Changed {
+        let before = self.clone();
+        let changed = match k {
+            "engine" => {
+                self.engine = crate::omni::engine_by_id(v.as_str().unwrap_or("")).id.to_string();
+                Changed::Plain
+            }
+            "blocker" => {
+                self.blocker = v.as_bool().unwrap_or(true);
+                Changed::Blocker
+            }
+            "theme" => {
+                if let Some(x) = one_of(v, &["system", "light", "dark"]) {
+                    self.theme = x;
+                }
+                Changed::Theme
+            }
+            "bar" => {
+                if let Some(x) = one_of(v, &["bottom", "top"]) {
+                    self.bar = x;
+                }
+                Changed::Layout
+            }
+            "glass" => {
+                self.glass = v.as_bool().unwrap_or(true);
+                Changed::Layout
+            }
+            "font" => {
+                if let Some(x) = one_of(v, &["system", "rounded", "serif", "mono"]) {
+                    self.font = x;
+                }
+                Changed::Look
+            }
+            "accent" => {
+                let a = v.as_str().unwrap_or("");
+                if a.len() == 7 && a.starts_with('#') && a[1..].chars().all(|c| c.is_ascii_hexdigit()) {
+                    self.accent = a.to_lowercase();
+                }
+                Changed::Look
+            }
+            "wall" => {
+                // Only Wisp's own gradients/colours: no url(), no closing the declaration.
+                let w = v.as_str().unwrap_or("");
+                if w.len() < 400 && !w.contains(['{', '}', ';', '<', '>', '\\']) && !w.to_lowercase().contains("url(") {
+                    self.wall = w.to_string();
+                }
+                Changed::Look
+            }
+            "clock" => {
+                self.clock = v.as_bool().unwrap_or(true);
+                Changed::Look
+            }
+            "dial" => {
+                self.dial = v.as_bool().unwrap_or(true);
+                Changed::Look
+            }
+            "bmbar" => {
+                self.bmbar = v.as_bool().unwrap_or(true);
+                Changed::Layout
+            }
+            "setup_done" => {
+                self.setup_done = v.as_bool().unwrap_or(true);
+                Changed::Plain
+            }
+            _ => Changed::Nothing,
+        };
+        if *self == before {
+            Changed::Nothing
+        } else {
+            changed
+        }
+    }
+
+    /// The New Tab page's look.
+    pub fn newtab(&self) -> Value {
+        json!({"font":self.font,"accent":self.accent,"wall":self.wall,"clock":self.clock,"dial":self.dial})
     }
 }
 
@@ -44,6 +170,14 @@ pub struct TabState {
     pub used: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct Bookmark {
+    pub url: String,
+    pub title: String,
+    pub icon: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Session {
@@ -51,6 +185,7 @@ pub struct Session {
     pub active: u64,
     pub next_id: u64,
     pub settings: Settings,
+    pub bookmarks: Vec<Bookmark>,
 }
 
 impl Default for Session {
@@ -60,6 +195,7 @@ impl Default for Session {
             active: 0,
             next_id: 1,
             settings: Settings::default(),
+            bookmarks: vec![],
         };
         let id = s.add_tab("");
         s.active = id;
@@ -73,6 +209,7 @@ impl Session {
         if s.tabs.is_empty() {
             return Session {
                 settings: s.settings,
+                bookmarks: s.bookmarks,
                 ..Session::default()
             };
         }
@@ -104,6 +241,34 @@ impl Session {
 
     pub fn tab_mut(&mut self, id: u64) -> Option<&mut TabState> {
         self.tabs.iter_mut().find(|t| t.id == id)
+    }
+
+    /// The bookmarks bar is on screen.
+    pub fn bmbar_shown(&self) -> bool {
+        self.settings.bmbar && !self.bookmarks.is_empty()
+    }
+
+    /// Bookmark the active page, or remove its bookmark. Returns whether it is now bookmarked.
+    pub fn toggle_bookmark(&mut self) -> bool {
+        let Some(t) = self.tab(self.active).cloned() else { return false };
+        if !t.url.starts_with("http") {
+            return false;
+        }
+        if let Some(i) = self.bookmarks.iter().position(|b| b.url == t.url) {
+            self.bookmarks.remove(i);
+            return false;
+        }
+        let title = if t.title.is_empty() { t.url.clone() } else { t.title.clone() };
+        self.bookmarks.push(Bookmark {
+            url: t.url,
+            title,
+            icon: t.icon,
+        });
+        true
+    }
+
+    pub fn remove_bookmark(&mut self, url: &str) {
+        self.bookmarks.retain(|b| b.url != url);
     }
 
     /// Mark `id` active and most recently used.
@@ -155,6 +320,9 @@ impl Session {
             "url": a.url, "title": a.title, "loading": a.loading, "desktop": a.desktop,
             "back": can_back, "fwd": can_fwd,
             "engine": self.settings.engine, "engines": engines, "blocker": self.settings.blocker,
+            "set": self.settings,
+            "bookmarks": self.bookmarks,
+            "bookmarked": self.bookmarks.iter().any(|b| b.url == a.url),
             "version": env!("CARGO_PKG_VERSION"),
         })
     }
@@ -313,6 +481,52 @@ mod tests {
         assert_eq!(back.tabs.len(), 2);
         assert_eq!(back.settings.engine, "google");
         assert_eq!(Session::load("not json").tabs.len(), 1);
+    }
+
+    #[test]
+    fn settings_validate() {
+        let mut s = Settings::default();
+        assert_eq!(s.set("theme", &json!("dark")), Changed::Theme);
+        assert_eq!(s.set("theme", &json!("dark")), Changed::Nothing);
+        assert_eq!(s.set("theme", &json!("purple")), Changed::Nothing);
+        assert_eq!(s.set("bar", &json!("top")), Changed::Layout);
+        assert_eq!(s.set("accent", &json!("#FF0000")), Changed::Look);
+        assert_eq!(s.accent, "#ff0000");
+        assert_eq!(s.set("accent", &json!("red;x")), Changed::Nothing);
+        assert_eq!(s.set("wall", &json!("linear-gradient(160deg,#111,#333)")), Changed::Look);
+        assert_eq!(s.set("wall", &json!("url(https://x)")), Changed::Nothing);
+        assert_eq!(s.set("wall", &json!("red}body{")), Changed::Nothing);
+        assert_eq!(s.set("nope", &json!(1)), Changed::Nothing);
+        assert_eq!(s.set("engine", &json!("google")), Changed::Plain);
+        assert_eq!(s.engine, "google");
+    }
+
+    #[test]
+    fn old_settings_files_get_new_defaults() {
+        let s = Session::load(r#"{"tabs":[{"id":1,"url":"https://a.example/"}],"active":1,"settings":{"engine":"bing","blocker":false}}"#);
+        assert_eq!(s.settings.engine, "bing");
+        assert!(s.settings.glass && !s.settings.setup_done);
+        assert_eq!(s.settings.bar, "bottom");
+    }
+
+    #[test]
+    fn bookmarks_toggle_and_survive_reset() {
+        let mut s = Session::default();
+        assert!(!s.toggle_bookmark(), "New Tab can't be bookmarked");
+        let id = s.add_tab("https://a.example/");
+        s.select(id);
+        s.tab_mut(id).unwrap().title = "A".into();
+        assert!(s.toggle_bookmark());
+        assert!(s.bmbar_shown());
+        assert_eq!(s.bookmarks[0].title, "A");
+        assert!(!s.toggle_bookmark());
+        assert!(!s.bmbar_shown());
+        s.toggle_bookmark();
+        let json = s.to_json();
+        let back = Session::load(&json);
+        assert_eq!(back.bookmarks.len(), 1);
+        s.remove_bookmark("https://a.example/");
+        assert!(s.bookmarks.is_empty());
     }
 
     #[test]

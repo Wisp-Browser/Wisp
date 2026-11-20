@@ -2,40 +2,73 @@
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <style>
-/* Wisp for iOS interface. Sits on a system blur (UIVisualEffectView), so backgrounds here are
-   transparent or lightly tinted. Two sizes: the bottom bar, and full screen for search, the tab
-   grid and the menu. */
+/* Wisp for iOS interface. Always full screen (touches outside the bar fall through to the page),
+   on a system blur (UIVisualEffectView) that covers the bar, or the whole screen while a sheet is
+   open. In the Flat style there is no blur and surfaces are solid. */
 :root{--accent:#5e5ce6;--fg:#f2f2f7;--fg2:rgba(242,242,247,.68);--fg3:rgba(242,242,247,.45);--line:rgba(255,255,255,.1);
  --fill:rgba(255,255,255,.1);--fill2:rgba(255,255,255,.16);--card:rgba(40,40,52,.72);--tint:rgba(10,10,16,.35);
- --ease:cubic-bezier(.16,.84,.44,1);color-scheme:dark}
+ --solid:#1c1c22;--ease:cubic-bezier(.16,.84,.44,1);--spring:cubic-bezier(.2,1.1,.3,1);--accent-fg:#fff;
+ --font:-apple-system,system-ui,sans-serif;color-scheme:dark}
 @media (prefers-color-scheme:light){:root{--fg:#111118;--fg2:rgba(17,17,24,.66);--fg3:rgba(17,17,24,.45);--line:rgba(0,0,0,.09);
- --fill:rgba(0,0,0,.06);--fill2:rgba(0,0,0,.1);--card:rgba(255,255,255,.8);--tint:rgba(240,240,246,.3);color-scheme:light}}
+ --fill:rgba(0,0,0,.06);--fill2:rgba(0,0,0,.1);--card:rgba(255,255,255,.8);--tint:rgba(240,240,246,.3);--solid:#f4f4f7;color-scheme:light}}
+body.f-rounded{--font:ui-rounded,-apple-system,system-ui,sans-serif}
+body.f-serif{--font:ui-serif,"New York",Georgia,serif}
+body.f-mono{--font:ui-monospace,Menlo,monospace}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-html,body{margin:0;height:100%;background:transparent;color:var(--fg);font:15px/1.3 -apple-system,system-ui,sans-serif;overflow:hidden}
+html,body{margin:0;height:100%;background:transparent;color:var(--fg);font:15px/1.3 var(--font);overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block}
 @media (prefers-reduced-motion:reduce){*{animation-duration:1ms!important;transition-duration:1ms!important}}
 
 /* ---------- bottom bar ---------- */
 #bar{position:fixed;left:0;right:0;bottom:0;height:calc(54px + env(safe-area-inset-bottom));padding:0 calc(8px + env(safe-area-inset-right)) env(safe-area-inset-bottom) calc(8px + env(safe-area-inset-left));
- display:flex;align-items:center;gap:4px;border-top:.5px solid var(--line)}
-#prog{position:absolute;left:0;top:-1px;height:2px;width:100%;background:var(--accent);transform-origin:left;transform:scaleX(0);opacity:0;transition:transform .4s var(--ease),opacity .25s}
+ display:flex;align-items:center;gap:4px;border-top:.5px solid var(--line);transition:opacity .2s var(--ease)}
+body.top #bar{top:0;bottom:auto;height:calc(54px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);padding-bottom:0;border-top:0;border-bottom:.5px solid var(--line)}
+body.flat #bar{background:var(--solid)}
+/* Glass style: no strip, a floating row of glass pills over the page (the glass itself is native,
+   drawn behind every .g element). */
+body:not(.flat) #bar{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));bottom:max(calc(env(safe-area-inset-bottom) - 8px),10px);
+ height:50px;padding:0;gap:8px;border:0}
+body.top:not(.flat) #bar{top:calc(env(safe-area-inset-top) + 2px);bottom:auto;height:50px;padding:0}
+body:not(.flat) #bar .ib{width:50px;height:50px;border-radius:25px}
+body:not(.flat) #addr{height:50px;border-radius:25px;background:transparent}
+body:not(.flat) #bar .ib:active,body:not(.flat) #addr:active{background:var(--fill)}
+#prog{position:absolute;left:14px;right:14px;bottom:2px;height:2.5px;border-radius:2px;background:var(--accent);transform-origin:left;transform:scaleX(0);opacity:0;transition:transform .4s var(--ease),opacity .25s}
 body.loading #prog{opacity:1;transform:scaleX(.85);transition:transform 6s cubic-bezier(.1,.6,.2,1),opacity .15s}
 body.done #prog{opacity:0;transform:scaleX(1);transition:transform .2s var(--ease),opacity .3s .15s}
 .ib{width:44px;height:44px;display:grid;place-items:center;border-radius:22px;flex:none;color:var(--fg)}
 .ib:active{background:var(--fill)}.ib:disabled{color:var(--fg3)}
-#addr{flex:1;min-width:0;height:40px;border-radius:20px;background:var(--fill);display:flex;align-items:center;gap:6px;padding:0 14px;position:relative}
+#addr{flex:1;min-width:0;height:40px;border-radius:20px;background:var(--fill);overflow:hidden;display:flex;align-items:center;gap:6px;padding:0 14px;position:relative}
 #addr .lock{width:13px;height:13px;stroke-width:2.2;color:var(--fg2);flex:none}
 #url{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;color:var(--fg);font:inherit;font-size:15px;text-align:center;padding:0;-webkit-user-select:text;user-select:text;text-overflow:ellipsis}
 #url::placeholder{color:var(--fg2)}
 #rl{width:30px;height:30px;margin-right:-8px}
 #count{width:24px;height:24px;border:1.8px solid currentColor;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:700}
 
+/* ---------- bookmarks bar (next to the address bar) ---------- */
+#bm{position:fixed;display:none;align-items:center;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;transition:opacity .2s var(--ease);
+ left:0;right:0;height:44px;padding:0 calc(8px + env(safe-area-inset-right)) 0 calc(8px + env(safe-area-inset-left));bottom:calc(54px + env(safe-area-inset-bottom));background:var(--solid);border-top:.5px solid var(--line)}
+#bm::-webkit-scrollbar{display:none}
+body.hasbm #bm{display:flex}body.full #bm{opacity:0;pointer-events:none}
+body.top #bm{bottom:auto;top:calc(54px + env(safe-area-inset-top));border-top:0;border-bottom:.5px solid var(--line)}
+body:not(.flat) #bm{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));height:36px;border-radius:18px;padding:0 6px;border:0;background:transparent;
+ bottom:calc(max(calc(env(safe-area-inset-bottom) - 8px),10px) + 58px)}
+body.top:not(.flat) #bm{bottom:auto;top:calc(env(safe-area-inset-top) + 60px)}
+.chip{flex:none;display:flex;align-items:center;gap:6px;height:28px;max-width:150px;padding:0 10px 0 7px;border-radius:14px;font-size:13px;font-weight:500;color:var(--fg)}
+.chip:active{background:var(--fill)}
+.chip img,.chip i{width:16px;height:16px;border-radius:4px;flex:none;background:var(--fill)}
+.chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 /* ---------- full-screen sheets ---------- */
-.sheet{position:fixed;inset:0;display:none;background:var(--tint);flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
-body.full #bar{display:none}
-body.s-search #search,body.s-tabs #tabs,body.s-menu #menu,body.s-set #set{display:flex;animation:in .18s var(--ease)}
-@keyframes in{from{opacity:0;transform:translateY(10px)}}
+.sheet{position:fixed;inset:0;display:none;background:var(--tint);flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);z-index:2}
+body.flat .sheet{background:var(--solid)}
+body.full #bar{opacity:0;pointer-events:none}
+.sheet.on{display:flex;animation:in .32s var(--spring)}
+.sheet.out{display:flex;animation:out .16s var(--ease) forwards;pointer-events:none}
+@keyframes in{from{opacity:0;transform:translateY(18px) scale(.985)}}
+@keyframes out{to{opacity:0;transform:translateY(10px)}}
+body.top .sheet.on{animation-name:intop}@keyframes intop{from{opacity:0;transform:translateY(-14px) scale(.985)}}
+button{transition:transform .12s var(--ease),background-color .15s,opacity .15s}button:active{transform:scale(.96)}
 .top{display:flex;align-items:center;gap:10px;padding:10px 14px}
 .top h2{flex:1;margin:0;font-size:17px;font-weight:600;text-align:center}
 .txt{color:var(--accent);font-weight:600;font-size:16px;padding:8px 4px;min-width:64px}
@@ -74,6 +107,12 @@ body.s-search #search,body.s-tabs #tabs,body.s-menu #menu,body.s-set #set{displa
 .list .row{border-radius:0;padding:13px 14px}.list .row+.row{border-top:.5px solid var(--line)}
 .grow{flex:1}
 .mbot{margin-top:auto;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+body:not(.flat) #menu{background:rgba(0,0,0,.28)}
+body:not(.flat) #menu .top{visibility:hidden}
+body:not(.flat) #menu .mbot{margin:auto 10px max(calc(env(safe-area-inset-bottom) - 8px),10px);padding:10px 0 6px;border-radius:30px}
+body:not(.flat) #menu .list,body:not(.flat) #menu .navrow button{background:var(--fill);border-color:transparent}
+body:not(.flat) #menu.on .mbot{animation:none}
+body:not(.flat) #menu.on .mbot>*{animation:in .3s var(--spring)}
 .navrow{display:flex;gap:10px;margin:6px 14px}
 .navrow button{flex:1;height:58px;border-radius:16px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;color:var(--fg2)}
 .navrow button svg{color:var(--fg)}.navrow button:disabled{opacity:.4}
@@ -82,17 +121,51 @@ body.s-search #search,body.s-tabs #tabs,body.s-menu #menu,body.s-set #set{displa
 .sw.on{background:#34c759}.sw.on i{transform:translateX(20px)}
 .chk{margin-left:auto;color:var(--accent);opacity:0}.on .chk{opacity:1}
 .about{color:var(--fg2);font-size:13px;text-align:center;padding:16px}
+/* segmented control, swatches, choice cards */
+.seg{display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--fill);margin:6px 14px}
+.seg button{flex:1;height:34px;border-radius:9px;font-size:14px;color:var(--fg2)}
+.seg button.on{background:var(--card);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.sws{display:flex;flex-wrap:wrap;gap:12px;padding:10px 16px}
+.sws button{width:34px;height:34px;border-radius:17px;box-shadow:inset 0 0 0 1px rgba(127,127,127,.25)}
+.sws button.on{box-shadow:0 0 0 2px var(--bg2,transparent),0 0 0 4px var(--fg)}
+.walls{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:8px 16px}
+.walls button{height:74px;border-radius:14px;box-shadow:inset 0 0 0 1px rgba(127,127,127,.25);position:relative;overflow:hidden}
+.walls button.on{box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),0 0 0 2px var(--accent)}
+.walls button span{position:absolute;left:8px;bottom:6px;font-size:11px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.opts{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:6px 16px}
+.opt{border-radius:18px;background:var(--card);border:1.5px solid var(--line);padding:10px;text-align:left;display:flex;flex-direction:column;gap:8px}
+.opt.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.opt b{font-size:15px;font-weight:600}.opt small{color:var(--fg2);font-size:12.5px;line-height:1.35}
+.ph{height:120px;border-radius:12px;background:var(--fill);position:relative;overflow:hidden}
+.ph i{position:absolute;left:8px;right:8px;height:12px;border-radius:6px;background:var(--fg3)}
+.ph i.pg{height:auto;background:var(--fill2);border-radius:6px}
+.ph.glassy{background:linear-gradient(140deg,#6d5df7,#d4418e 60%,#ffaf7b)}
+.ph.glassy i{background:rgba(255,255,255,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-top:1px solid rgba(255,255,255,.5)}
+.ph.flatty i{background:var(--solid);opacity:1}
+.aa{height:84px;border-radius:12px;background:var(--fill);display:flex;flex-direction:column;justify-content:center;padding:0 12px}
+.aa span{font-size:30px;font-weight:600;line-height:1}.aa em{font-style:normal;font-size:12px;color:var(--fg2);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* first-run setup */
+#setup .body{flex:1;overflow-y:auto;padding:14px 0 10px}
+#setup h1{font-size:28px;font-weight:700;margin:8px 20px 6px;letter-spacing:-.01em}
+#setup p.sub{color:var(--fg2);margin:0 20px 14px;font-size:15px;line-height:1.4}
+#setup .logo{width:64px;height:64px;border-radius:18px;margin:26px 20px 6px;background:linear-gradient(140deg,var(--accent),#d4418e);display:grid;place-items:center;color:#fff;font-size:34px;font-weight:700}
+#setup .step{animation:in .3s var(--spring)}
+#setup .ft{display:flex;align-items:center;gap:10px;padding:10px 16px calc(12px + env(safe-area-inset-bottom))}
+.dots{display:flex;gap:6px;flex:1}.dots i{width:7px;height:7px;border-radius:4px;background:var(--fill2);transition:width .25s var(--ease),background .25s}.dots i.on{width:20px;background:var(--accent)}
+.pbtn{height:46px;padding:0 22px;border-radius:23px;background:var(--fill);font-weight:600}
+.pbtn.go{background:var(--accent);color:var(--accent-fg)}
 </style></head><body>
 
 <div id="bar">
- <div id="prog"></div>
- <button class="ib" id="back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
- <label id="addr"><svg class="lock" viewBox="0 0 24 24" id="lock"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+ <button class="ib g" id="back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+ <label id="addr" class="g"><div id="prog"></div><svg class="lock" viewBox="0 0 24 24" id="lock"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
   <input id="url" type="text" readonly placeholder="Search or enter address" aria-label="Address">
   <button class="ib" id="rl" aria-label="Reload"><svg viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button></label>
- <button class="ib" id="tabsb" aria-label="Tabs"><span id="count">1</span></button>
- <button class="ib" id="moreb" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/></svg></button>
+ <button class="ib g" id="tabsb" aria-label="Tabs"><span id="count">1</span></button>
+ <button class="ib g" id="moreb" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/></svg></button>
 </div>
+
+<div id="bm" class="g" aria-label="Bookmarks"></div>
 
 <div class="sheet" id="search">
  <div class="top"><div id="sbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
@@ -109,7 +182,7 @@ body.s-search #search,body.s-tabs #tabs,body.s-menu #menu,body.s-set #set{displa
 
 <div class="sheet" id="menu">
  <div class="top"><span style="width:64px"></span><h2>Wisp</h2><button class="txt r" data-close>Done</button></div>
- <div class="mbot">
+ <div class="mbot g">
   <div class="navrow">
    <button id="mback"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Back</button>
    <button id="mfwd"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>Forward</button>
@@ -117,6 +190,7 @@ body.s-search #search,body.s-tabs #tabs,body.s-menu #menu,body.s-set #set{displa
   </div>
   <div class="list">
    <button class="row" id="mnew"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div><span><b>New tab</b></span></button>
+   <button class="row" id="mbm"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></svg></div><span><b id="mbmt">Add bookmark</b></span></button>
    <button class="row" id="mcopy"><div class="ic"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></div><span><b>Copy link</b></span></button>
    <button class="row" id="mdesk"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><span><b id="mdeskt">Request desktop site</b></span></button>
    <button class="row" id="mblock"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></div><span><b>Block ads & trackers</b></span><div class="sw" id="blocksw"><i></i></div></button>
@@ -127,12 +201,12 @@ body.s-search #search,body.s-tabs #tabs,body.s-menu #menu,body.s-set #set{displa
 
 <div class="sheet" id="set">
  <div class="top"><button class="txt l" id="setback">Back</button><h2>Settings</h2><span style="width:64px"></span></div>
- <div style="overflow-y:auto;flex:1;padding-bottom:20px">
-  <div class="lbl">Search engine</div><div class="list" id="engines"></div>
-  <div class="lbl">Privacy</div>
-  <div class="list"><button class="row" id="sblock"><span><b>Block ads & trackers</b><small>Blocks common ad and tracking networks on every site.</small></span><div class="sw" id="blocksw2"><i></i></div></button></div>
-  <div class="about" id="about"></div>
- </div>
+ <div style="overflow-y:auto;flex:1;padding-bottom:calc(20px + env(safe-area-inset-bottom))" id="setbody"></div>
+</div>
+
+<div class="sheet" id="setup">
+ <div class="body" id="subody"></div>
+ <div class="ft"><div class="dots" id="sudots"></div><button class="pbtn" id="suback">Back</button><button class="pbtn go" id="sunext">Continue</button></div>
 </div>
 
 <script>
@@ -142,7 +216,7 @@ const host=u=>{try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){retu
 const IC={x:'<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',search:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>',
  globe:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',tab:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/></svg>',
  check:'<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M5 12l5 5 9-10"/></svg>'};
-let S={tabs:[],active:0,url:'',title:'',engines:[],engine:'ddg',blocker:true},sheet='',wasLoading=false;
+let S={tabs:[],active:0,url:'',title:'',engines:[],engine:'ddg',blocker:true,set:{}},sheet='',wasLoading=false;
 
 // ----- state from Wisp -----
 window.wisp={state(s){S=s;render()}};
@@ -157,16 +231,36 @@ function render(){
  wasLoading=S.loading;
  $('#mback').disabled=!S.back;$('#mfwd').disabled=!S.fwd;
  $('#mdeskt').textContent=S.desktop?'Request mobile site':'Request desktop site';
- ['#blocksw','#blocksw2'].forEach(x=>$(x).classList.toggle('on',!!S.blocker));
- $('#engines').innerHTML=S.engines.map(e=>`<button class="row ${e.id===S.engine?'on':''}" data-eng="${e.id}"><span><b>${esc(e.name)}</b></span><span class="chk">${IC.check}</span></button>`).join('');
- $('#about').textContent='Wisp '+S.version+' · pages use WebKit, the engine built into iOS';
- if(sheet==='tabs')renderTabs();if(sheet==='search')renderSugg();
+ $('#blocksw').classList.toggle('on',!!S.blocker);
+ applyLook();renderBm();
+ if(S.set&&!S.set.setup_done&&!suAuto){suAuto=true;su=0;open('setup');return}
+ if(sheet==='tabs')renderTabs();if(sheet==='search')renderSugg();if(sheet==='set')renderSet();
 }
 
 // ----- sheets (full screen) -----
-function open(name){sheet=name;const b=document.body.classList;b.add('full');['search','tabs','menu','set'].forEach(n=>b.toggle('s-'+n,n===name));send({t:'mode',full:true});
- if(name==='tabs')renderTabs();if(name==='search')renderSugg()}
-function close(){sheet='';const b=document.body.classList;b.remove('full','s-search','s-tabs','s-menu','s-set');$('#q').blur();send({t:'mode',full:false})}
+// Sheets: the glass grows natively while the sheet springs in; on close the bar is back at once
+// (the interface never resizes) and the sheet fades out over it.
+function open(name){sheet=name;document.body.classList.add('full');send({t:'mode',full:true,blur:name!=='menu'});
+ document.querySelectorAll('.sheet').forEach(x=>{const on=x.id===name;x.classList.remove('out');if(on&&!x.classList.contains('on'))x.classList.add('on');if(!on)x.classList.remove('on')});
+ if(name==='tabs')renderTabs();if(name==='search')renderSugg();if(name==='set')renderSet();if(name==='setup')renderSetup();shapes()}
+function close(){if(!sheet)return;const el=$('#'+sheet);sheet='';$('#q').blur();send({t:'mode',full:false});document.body.classList.remove('full');
+ el.classList.remove('on');el.classList.add('out');setTimeout(()=>{if(sheet!==el.id)el.classList.remove('out')},170);shapes()}
+
+// Native glass: report where the .g elements are (layout boxes, ignoring entrance animations),
+// plus the bar's box so Rust knows where the bar takes touches.
+const lbox=el=>{let x=0,y=0,e=el;while(e){x+=e.offsetLeft;y+=e.offsetTop;e=e.offsetParent}return{x,y,w:el.offsetWidth,h:el.offsetHeight}};
+let shSig='',shRaf=0;
+function shapes(){if(shRaf)return;shRaf=requestAnimationFrame(()=>{shRaf=0;const b=document.body.classList,r=[];
+ if(!b.contains('flat'))document.querySelectorAll('.g').forEach(el=>{
+  if(!el.offsetWidth||!el.getClientRects().length)return;
+  const inBar=!!el.closest('#bar'),sh=el.closest('.sheet');
+  if((inBar||el.id==='bm')&&b.contains('full'))return;if(sh&&!sh.classList.contains('on'))return;
+  const q=lbox(el);r.push([q.x,q.y,q.w,q.h,parseFloat(getComputedStyle(el).borderTopLeftRadius)||0])});
+ let hb=lbox($('#bar'));const bm=$('#bm');
+ if(b.contains('hasbm')&&bm.offsetWidth){const q=lbox(bm),x=Math.min(hb.x,q.x),y=Math.min(hb.y,q.y);hb={x,y,w:Math.max(hb.x+hb.w,q.x+q.w)-x,h:Math.max(hb.y+hb.h,q.y+q.h)-y}}
+ const msg={t:'shapes',r,hot:[hb.x,hb.y,hb.w,hb.h]},sig=JSON.stringify(msg);
+ if(sig!==shSig){shSig=sig;send(msg)}})}
+addEventListener('resize',shapes);
 document.querySelectorAll('[data-close]').forEach(x=>x.onclick=close);
 
 // ----- address / search -----
@@ -204,12 +298,74 @@ function renderTabs(){$('#tcount').textContent=S.tabs.length===1?'1 tab':S.tabs.
 $('#back').onclick=()=>send({t:'back'});
 $('#rl').onclick=e=>{e.preventDefault();e.stopPropagation();send({t:S.loading?'stop':'reload'})};
 $('#moreb').onclick=()=>open('menu');
+$('#menu').addEventListener('click',e=>{if(e.target.id==='menu')close()});
 $('#mback').onclick=()=>{send({t:'back'});close()};$('#mfwd').onclick=()=>{send({t:'fwd'});close()};$('#mrl').onclick=()=>{send({t:'reload'});close()};
 $('#mnew').onclick=()=>{send({t:'new'});const q=$('#q');q.value='';open('search');q.focus()};
 $('#mcopy').onclick=()=>{send({t:'copy'});close()};
+$('#mbm').onclick=()=>{send({t:'bookmark'});close()};
+function renderBm(){const on=!!(S.set&&S.set.bmbar)&&(S.bookmarks||[]).length>0;document.body.classList.toggle('hasbm',on);
+ $('#bm').innerHTML=on?S.bookmarks.map(b=>`<button class="chip" data-url="${esc(b.url)}">${b.icon?`<img src="${esc(b.icon)}" onerror="this.outerHTML='<i></i>'">`:'<i></i>'}<span>${esc(b.title||host(b.url))}</span></button>`).join(''):'';
+ $('#bm').querySelectorAll('[data-url]').forEach(x=>x.onclick=()=>send({t:'open',url:x.dataset.url}));
+ $('#mbmt').textContent=S.bookmarked?'Remove bookmark':'Add bookmark';$('#mbm').disabled=!(S.url||'').startsWith('http');shapes()}
 $('#mdesk').onclick=()=>{send({t:'desktop'});close()};
-$('#mblock').onclick=$('#sblock').onclick=()=>send({t:'set',k:'blocker',v:!S.blocker});
+$('#mblock').onclick=()=>send({t:'set',k:'blocker',v:!S.blocker});
 $('#mset').onclick=()=>open('set');$('#setback').onclick=()=>open('menu');
-$('#engines').onclick=e=>{const r=e.target.closest('[data-eng]');if(r)send({t:'set',k:'engine',v:r.dataset.eng})};
+const set=(k,v)=>{S.set[k]=v;applyLook();send({t:'set',k,v})};
+
+// ----- customisation -----
+const ACC=['#5e5ce6','#0a84ff','#30b0c7','#34c759','#ff9f0a','#ff375f','#bf5af2','#8e8e93'];
+const WALLS=[['','Wisp','radial-gradient(120% 80% at 15% 0%,#3b2a7a,transparent 60%),radial-gradient(100% 70% at 100% 100%,#7a2a4f,transparent 55%),#14121f'],
+ ['linear-gradient(160deg,#0f2027,#203a43,#2c5364)','Ocean'],['linear-gradient(160deg,#1a0b2e,#5b2a86,#d4418e)','Dusk'],['linear-gradient(160deg,#0b3d0b,#1e7a3c,#9ad06b)','Forest'],
+ ['linear-gradient(160deg,#3a1c71,#d76d77,#ffaf7b)','Sunset'],['#0c0c0f','Black'],['linear-gradient(160deg,#e0eafc,#cfdef3)','Mist'],['linear-gradient(160deg,#ffecd2,#fcb69f)','Peach'],['linear-gradient(160deg,#fdfbfb,#e6e9ee)','Paper']];
+const FONTS=[['system','System','Apple’s SF Pro','-apple-system,system-ui'],['rounded','Rounded','Soft and friendly','ui-rounded,-apple-system'],['serif','Serif','Classic, like New York','ui-serif,Georgia,serif'],['mono','Mono','Monospaced','ui-monospace,Menlo,monospace']];
+const lum=h=>{const n=parseInt(h.slice(1),16),f=c=>{c/=255;return c<=.03928?c/12.92:((c+.055)/1.055)**2.4};return .2126*f(n>>16&255)+.7152*f(n>>8&255)+.0722*f(n&255)};
+function applyLook(){shapes();const c=S.set||{},b=document.body.classList;b.toggle('flat',c.glass===false);b.toggle('top',c.bar==='top');
+ ['rounded','serif','mono'].forEach(f=>b.toggle('f-'+f,c.font===f));const r=document.documentElement.style;
+ if(c.accent){r.setProperty('--accent',c.accent);r.setProperty('--accent-fg',lum(c.accent)>.45?'#111':'#fff')}}
+const segOf=(k,opts)=>`<div class="seg">${opts.map(([v,n])=>`<button data-k="${k}" data-v="${v}" class="${String(S.set[k])===String(v)?'on':''}">${n}</button>`).join('')}</div>`;
+const swOf=(k,t,sub)=>`<button class="row" data-tog="${k}"><span><b>${t}</b>${sub?`<small>${sub}</small>`:''}</span><div class="sw ${S.set[k]?'on':''}"><i></i></div></button>`;
+const accOf=()=>`<div class="sws">${ACC.map(a=>`<button data-k="accent" data-v="${a}" style="background:${a}" class="${S.set.accent===a?'on':''}" aria-label="Accent ${a}"></button>`).join('')}</div>`;
+const phone=(top,cls)=>`<div class="ph ${cls||''}"><i class="pg" style="top:${top?28:8}px;bottom:${top?8:28}px"></i><i style="${top?'top:8px':'bottom:8px'}"></i></div>`;
+const layOpts=()=>`<div class="opts">${[['bottom','Bottom bar','Easy to reach with one hand'],['top','Top bar','Classic, like a desktop browser']].map(([v,n,d])=>
+ `<button class="opt ${S.set.bar===v?'on':''}" data-k="bar" data-v="${v}">${phone(v==='top')}<b>${n}</b><small>${d}</small></button>`).join('')}</div>`;
+const glassOpts=()=>`<div class="opts">${[[true,'Glass','Frosted, see-through bars','glassy'],[false,'Flat','Solid and simple','flatty']].map(([v,n,d,c])=>
+ `<button class="opt ${S.set.glass===v?'on':''}" data-k="glass" data-v="${v}">${phone(S.set.bar==='top',c)}<b>${n}</b><small>${d}</small></button>`).join('')}</div>`;
+const fontOpts=()=>`<div class="opts">${FONTS.map(([v,n,d,f])=>`<button class="opt ${S.set.font===v?'on':''}" data-k="font" data-v="${v}"><div class="aa" style="font-family:${f}"><span>Aa</span><em>The quick brown fox</em></div><b>${n}</b><small>${d}</small></button>`).join('')}</div>`;
+const themeSeg=()=>segOf('theme',[['system','Automatic'],['light','Light'],['dark','Dark']]);
+function wire(root){
+ root.querySelectorAll('[data-k]').forEach(x=>x.onclick=()=>{let v=x.dataset.v;if(v==='true'||v==='false')v=v==='true';set(x.dataset.k,v);rerender()});
+ root.querySelectorAll('[data-tog]').forEach(x=>x.onclick=()=>{const k=x.dataset.tog;set(k,!S.set[k]);rerender()});
+ root.querySelectorAll('[data-eng]').forEach(x=>x.onclick=()=>{send({t:'set',k:'engine',v:x.dataset.eng})});
+ root.querySelectorAll('[data-unbm]').forEach(x=>x.onclick=()=>send({t:'unbookmark',url:x.dataset.unbm}))}
+function rerender(){if(sheet==='set')renderSet();if(sheet==='setup')renderSetup()}
+function renderSet(){const b=$('#setbody'),y=b.scrollTop;
+ b.innerHTML=`<div class="lbl">Theme</div>${themeSeg()}
+  <div class="lbl">Layout</div>${layOpts()}
+  <div class="lbl">Style</div>${glassOpts()}
+  <div class="lbl">Font</div>${fontOpts()}
+  <div class="lbl">Accent colour</div>${accOf()}
+  <div class="lbl">New Tab</div><div class="walls">${WALLS.map(([v,n,pv])=>`<button data-k="wall" data-v="${v}" style="background:${pv||v}" class="${(S.set.wall||'')===v?'on':''}"><span>${n}</span></button>`).join('')}</div>
+  <div class="list">${swOf('clock','Show clock')}${swOf('dial','Show shortcuts')}</div>
+  <div class="lbl">Bookmarks</div><div class="list">${swOf('bmbar','Show bookmarks bar','Your bookmarks, one tap away next to the address bar.')}
+   ${(S.bookmarks||[]).map(b=>`<div class="row"><div class="ic">${b.icon?`<img src="${esc(b.icon)}" onerror="this.remove()">`:''}</div><span><b>${esc(b.title||host(b.url))}</b><small>${esc(host(b.url))}</small></span><button class="ib" data-unbm="${esc(b.url)}" aria-label="Remove bookmark" style="width:36px;height:36px">${IC.x}</button></div>`).join('')||'<div class="row"><span><small>Add one from the menu: ⋯ → Add bookmark.</small></span></div>'}</div>
+  <div class="lbl">Search engine</div><div class="list">${S.engines.map(e=>`<button class="row ${e.id===S.engine?'on':''}" data-eng="${e.id}"><span><b>${esc(e.name)}</b></span><span class="chk">${IC.check}</span></button>`).join('')}</div>
+  <div class="lbl">Privacy</div><div class="list">${swOf('blocker','Block ads & trackers','Blocks common ad and tracking networks on every site.')}</div>
+  <div class="list" style="margin-top:18px"><button class="row" id="resetup"><span><b>Show the welcome setup again</b></span></button></div>
+  <div class="about">Wisp ${esc(S.version)} · pages use WebKit, the engine built into iOS</div>`;
+ b.scrollTop=y;wire(b);$('#resetup').onclick=()=>{su=0;open('setup')}}
+
+// ----- first-run setup -----
+let su=0,suShown=-1,suAuto=false;
+const STEPS=[
+ ()=>`<div class="logo">W</div><h1>Welcome to Wisp</h1><p class="sub">A light, private browser. Let’s pick how it looks; you can change any of this later in Settings.</p><div class="lbl">Theme</div>${themeSeg()}`,
+ ()=>`<h1>Choose a layout</h1><p class="sub">Same features either way, just where the bar sits.</p>${layOpts()}`,
+ ()=>`<h1>Glass or flat</h1><p class="sub">Frosted, see-through bars, or solid ones.</p>${glassOpts()}`,
+ ()=>`<h1>Make it yours</h1><p class="sub">Pick a font and an accent colour.</p>${fontOpts()}<div class="lbl">Accent colour</div>${accOf()}`];
+function renderSetup(){const b=$('#subody'),y=b.scrollTop,anim=suShown!==su;suShown=su;
+ b.innerHTML=`<div class="${anim?'step':''}">${STEPS[su]()}</div>`;if(!anim)b.scrollTop=y;wire(b);
+ $('#sudots').innerHTML=STEPS.map((_,i)=>`<i class="${i===su?'on':''}"></i>`).join('');
+ $('#suback').style.visibility=su?'visible':'hidden';$('#sunext').textContent=su<STEPS.length-1?'Continue':'Start browsing'}
+$('#sunext').onclick=()=>{if(su<STEPS.length-1){su++;renderSetup()}else{set('setup_done',true);close()}};
+$('#suback').onclick=()=>{if(su){su--;renderSetup()}};
 send({t:'ready'});
 </script></body></html>

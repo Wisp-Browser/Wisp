@@ -4,7 +4,7 @@ name: iOS
 on:
   push:
     branches: [main, ios]
-    paths: ["ios/**", "src/omni.rs", "assets/icon256.png", ".github/workflows/ios.yml"]
+    paths: ["ios/**", "src/omni.rs", ".github/workflows/ios.yml"]
   pull_request:
     paths: ["ios/**", "src/omni.rs"]
   workflow_dispatch:

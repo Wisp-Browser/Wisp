@@ -1,8 +1,9 @@
 <!doctype html><html><head><meta charset="utf-8"><title>Wisp</title><link rel="stylesheet" href="/theme.css"><link rel="stylesheet" href="/ai.css"><link rel="stylesheet" href="/m5.css">
 <style>
 /* Layout geometry (logical px) — mirrored in src/main.rs (App::content). */
-body{--h1:40px;--h2:44px;--ct:86px;--cl:8px;--rt:8px;--sw:232px}
-body.lay-compact,body.lay-vertical{--h1:46px;--h2:0px;--ct:48px}
+body{--h1:40px;--h2:44px;--bm:0px;--ct:calc(86px + var(--bm));--cl:8px;--rt:8px;--sw:232px}
+body.lay-compact,body.lay-vertical{--h1:46px;--h2:0px;--ct:calc(48px + var(--bm))}
+body.hasbm{--bm:32px} /* bookmarks bar (BMBAR_H) */
 body.lay-vertical{--cl:calc(var(--sw) + 16px)}
 body.lay-vertical.collapsed{--sw:52px}
 html{background:transparent}
@@ -33,6 +34,17 @@ body.flat #wall,body.flat #wallv,body.flat #dim{display:none!important}
 #row1{top:0;height:var(--h1);padding-left:8px}
 #row2{top:var(--h1);height:var(--h2);padding:0 8px;display:none;gap:4px}
 body.lay-classic #row2{display:flex}
+/* bookmarks bar */
+#bmbar{top:calc(var(--h1) + var(--h2));height:var(--bm);padding:0 10px 4px;display:none;gap:2px}
+body.hasbm #bmbar{display:flex}
+#bml{flex:1;min-width:0;display:flex;gap:2px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;align-self:stretch;align-items:center}
+#bml::-webkit-scrollbar{display:none}
+.bmc{flex:none;display:flex;align-items:center;gap:7px;height:26px;max-width:190px;padding:0 10px 0 8px;border:0;border-radius:var(--pill);background:none;color:var(--fg2);font-size:12.5px;transition:background-color var(--dur-s) var(--ease),color var(--dur-s) var(--ease)}
+.bmc:hover{background:var(--hover);color:var(--fg)}.bmc:active{background:var(--press)}
+.bmc .f{width:14px;height:14px;border-radius:3px;flex:none;display:grid;place-items:center;font-size:9px;font-weight:700;overflow:hidden;color:var(--fg2)}
+.bmc .f img{width:14px;height:14px}
+.bmc span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bmall{flex:none}
 body.lay-compact #row1,body.lay-vertical #row1{gap:4px}
 .drag{flex:1 1 0;min-width:28px;align-self:stretch}
 .wc{display:flex;align-self:stretch;margin-left:2px}
@@ -152,6 +164,7 @@ body.fs .row,body.fs #side{display:none}
 <div class="rz" data-d="se" style="bottom:0;right:0;width:10px;height:10px;cursor:se-resize"></div>
 <header id="row1" class="row"></header>
 <div id="row2" class="row"></div>
+<nav id="bmbar" class="row" aria-label="Bookmarks bar"><div id="bml"></div><button class="bmc" id="bmall" title="All bookmarks (Ctrl+Shift+O)"></button></nav>
 <aside id="side" class="glass-s"></aside>
 <div id="parts">
  <button class="ib" id="sidetog" title="Collapse sidebar"></button>
@@ -269,6 +282,16 @@ function applyChrome(){const glass=!!S.glass_on&&!!S.glass_ok,lay=SLOTS[S.layout
  if(!first&&document.startViewTransition&&!RM.matches)document.startViewTransition(go);else go()}
 const FONT_IDS=['inter','rounded','system','serif','mono'];
 function applyFont(f){const b=document.body.classList;FONT_IDS.forEach(k=>b.toggle('f-'+k,k===(f||'inter')))}
+// Bookmarks bar: click opens in this tab, middle- or Ctrl-click in a new tab.
+let bmSig='';const bmEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function renderBm(){const on=!!S.bmbar&&(S.bms||[]).length>0;document.body.classList.toggle('hasbm',on);
+ const sig=on?JSON.stringify(S.bms):'';if(sig===bmSig)return;bmSig=sig;
+ $('#bml').innerHTML=on?S.bms.map(b=>`<button class="bmc" data-u="${bmEsc(b.url)}" title="${bmEsc(b.title)}\n${bmEsc(b.url)}"><i class="f">${ic(b)}</i><span>${bmEsc(b.title||b.url)}</span></button>`).join(''):'';
+ $('#bmall').innerHTML=ico('bookmark')+'<span>All bookmarks</span>'}
+$('#bml').addEventListener('click',e=>{const b=e.target.closest('[data-u]');if(!b)return;send(e.ctrlKey||e.metaKey?{t:'open',url:b.dataset.u}:{t:'go',input:b.dataset.u})});
+$('#bml').addEventListener('auxclick',e=>{const b=e.target.closest('[data-u]');if(b&&e.button===1){e.preventDefault();send({t:'open',url:b.dataset.u})}});
+$('#bml').addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){$('#bml').scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
+$('#bmall').onclick=()=>window.M5&&M5.lib&&M5.lib('bookmarks');
 function render(){
   applyChrome();applyFont(S.font);
   const r=document.documentElement.style;
@@ -276,6 +299,7 @@ function render(){
   r.setProperty('--sa',(.6+S.glass*.3).toFixed(2));
   document.body.classList.toggle('fs',!!S.fullscreen);
   wall(S.nt);
+  renderBm();
   // spaces
   const cs=S.spaces.find(s=>s.id===S.cur)||{name:'',color:'#888'};
   $('#spbtn i').style.background=cs.color;$('#spbtn b').textContent=cs.name;$('#spbtn').title='Space: '+cs.name;

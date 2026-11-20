@@ -92,9 +92,33 @@ jobs:
       - name: Publish the GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          body: |
+            **Windows:** `Wisp-${{ env.VERSION }}-setup.exe` (installer) or `Wisp-${{ env.VERSION }}-windows-x64.exe` (portable). Existing installs update themselves.
+            **iPhone and iPad (preview):** `Wisp-${{ env.VERSION }}-iOS.ipa`. Install it from Windows with Sideloadly; see [ios/README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/ios/README.md#installing-on-your-iphone-from-windows).
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             dist/*.exe
             dist/SHA256SUMS.txt
             dist/latest.json
+
+  ios:
+    name: Build and attach the iOS app
+    needs: windows
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ios
+      - name: Build the .ipa
+        run: |
+          export WISP_VERSION="${GITHUB_REF_NAME#v}"
+          bash ios/build-ipa.sh
+      - name: Attach it to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ios/target/ipa/*.ipa

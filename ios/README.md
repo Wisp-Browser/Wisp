@@ -14,23 +14,29 @@ Wisp for iPhone and iPad, written in Rust. It's a native UIKit app built with th
 - **Content blocker:** about 80 ad and tracker networks are blocked by WebKit's own content-rule
   engine, which is compiled once, cached by iOS, and adds no per-request work in Rust.
 
-## What's in this first version
+## What's in it
 
-- Bottom bar: back, address/search, reload/stop, tab count, menu. The bar sits on the system blur
-  material, so it's frosted glass.
-- Full-screen search, with "switch to tab" suggestions.
-- Tab grid: open, close, close all (tap twice), new tab.
-- Menu: back/forward/reload, new tab, copy link, request desktop site, ad blocker, settings
-  (search engine).
+- **First-run setup**: theme (automatic/light/dark), layout (bottom or top bar), glass or flat,
+  font (SF Pro, SF Rounded, New York serif, SF Mono — all built into iOS) and accent colour. You
+  can run it again from Settings.
+- **Liquid Glass**: on iOS 26 the bar buttons, the bookmarks bar and the menu sit on Apple's own
+  glass material (`UIGlassEffect`). Older iOS uses the system blur. In the Glass style, pages run
+  underneath the floating bar.
+- **Bookmarks bar** next to the address bar. Add bookmarks from the menu (⋯ → Add bookmark) and
+  manage them in Settings.
+- Address bar with search, reload/stop, and full-screen search with "switch to tab" suggestions.
+- Tab grid with close, close all (tap twice) and new tab. Pages cross-fade when you switch tabs.
+- Menu: back/forward/reload, new tab, bookmark, copy link, request desktop site, ad blocker,
+  settings.
+- Settings: everything from setup, plus the New Tab wallpaper, clock and shortcuts, search engine
+  and ad blocker.
 - Swipe from the screen edge to go back or forward.
-- New Tab page with clock, search and shortcuts.
-- Tabs and settings are saved between launches.
+- Tabs, bookmarks and settings are saved between launches.
 - Links to phone numbers, mail, maps and the App Store open in their apps.
 - `target=_blank` links open in a new tab.
-- Light and dark mode follow the system. Works in portrait and landscape, on iPhone and iPad.
 
-Not yet: history, bookmarks, downloads, private tabs, tab thumbnails, JavaScript `alert()` dialogs,
-sync with desktop Wisp.
+Not yet: history, downloads, private tabs, tab thumbnails, JavaScript `alert()` dialogs, sync
+with desktop Wisp.
 
 ## Layout
 
@@ -43,6 +49,7 @@ sync with desktop Wisp.
 | `ui/chrome.html` | The interface (bottom bar, sheets). |
 | `ui/newtab.html` | The New Tab page. |
 | `Info.plist`, `build-ipa.sh` | App bundle and packaging. |
+| `icon.svg` → `AppIcon.png` | App icon source and its 1024px render. |
 
 ## Building
 
@@ -63,8 +70,9 @@ push that touches `ios/` and uploads `Wisp-ios` (the `.ipa`) as a workflow artif
 The `.ipa` from GitHub isn't signed for your phone. A sideloading tool signs it with your own
 (free) Apple ID:
 
-1. **Get the .ipa:** on GitHub, open **Actions → iOS → the latest green run**. Download
-   **Wisp-ios** under *Artifacts* and unzip it to get `Wisp-…-ios.ipa`.
+1. **Get the .ipa:** download `Wisp-<version>-iOS.ipa` from the
+   [latest release](https://github.com/jakedev2/Wisp/releases/latest). Builds of unreleased
+   changes are under **Actions → iOS** as the `Wisp-ios` artifact.
 2. **Install Apple's device drivers:** install **iTunes** (the version from apple.com, not the
    Microsoft Store one) or the **Apple Devices** app. Then plug in the iPhone and tap **Trust** on
    the phone.
