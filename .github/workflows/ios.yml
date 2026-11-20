@@ -1,0 +1,42 @@
+name: iOS
+
+# Builds Wisp for iOS on a Mac runner and uploads the .ipa as a workflow artifact.
+on:
+  push:
+    branches: [main, ios]
+    paths: ["ios/**", "src/omni.rs", "assets/icon256.png", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", "src/omni.rs"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ios
+      - name: Format
+        working-directory: ios
+        run: cargo fmt -- --check
+      - name: Unit tests
+        working-directory: ios
+        run: cargo test
+      - name: Lint (iOS)
+        working-directory: ios
+        run: cargo clippy --target aarch64-apple-ios -- -D warnings
+      - name: Build .ipa
+        run: bash ios/build-ipa.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wisp-ios
+          path: ios/target/ipa/*.ipa
+          if-no-files-found: error

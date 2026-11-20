@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleExecutable</key><string>Wisp</string>
+	<key>CFBundleIdentifier</key><string>dev.wisp.browser</string>
+	<key>CFBundleName</key><string>Wisp</string>
+	<key>CFBundleDisplayName</key><string>Wisp</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>__VERSION__</string>
+	<key>CFBundleVersion</key><string>__BUILD__</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
+	<key>DTPlatformName</key><string>iphoneos</string>
+	<key>MinimumOSVersion</key><string>15.0</string>
+	<key>LSRequiresIPhoneOS</key><true/>
+	<key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+	<!-- An (empty) launch screen makes iOS run Wisp full screen on every device size. -->
+	<key>UILaunchScreen</key><dict/>
+	<key>UIApplicationSupportsIndirectInputEvents</key><true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- A browser has to load plain http:// sites too (in web content only). -->
+	<key>NSAppTransportSecurity</key>
+	<dict><key>NSAllowsArbitraryLoadsInWebContent</key><true/></dict>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict>
+	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string><string>AppIcon76x76</string><string>AppIcon83.5x83.5</string></array></dict>
+	</dict>
+</dict>
+</plist>

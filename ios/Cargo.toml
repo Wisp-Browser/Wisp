@@ -1,0 +1,34 @@
+[package]
+name = "wisp-ios"
+version = "0.1.0"
+edition = "2021"
+description = "Wisp for iPhone and iPad"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "Wisp"
+path = "src/main.rs"
+
+# Standalone: not part of the desktop crate's build.
+[workspace]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = "0.3"
+objc2-core-foundation = "0.3"
+objc2-ui-kit = "0.3"
+objc2-web-kit = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

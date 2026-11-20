@@ -56,6 +56,12 @@ The default is to keep it. Silent: `"%LOCALAPPDATA%\Programs\Wisp\Uninstall.exe"
 
 Your data lives in `%APPDATA%\Wisp`.
 
+## iPhone and iPad (early preview)
+
+[`ios/`](ios/) holds Wisp for iOS: a native Rust app on the system's WebKit engine with a glass bottom bar,
+tab grid and content blocker. See [ios/README.md](ios/README.md) for what's in it and how to install it on
+your phone from Windows.
+
 ## Keyboard shortcuts
 
 Everything is rebindable in *Settings → Shortcuts*. Defaults: `Ctrl+T` new tab, `Ctrl+W` close, `Ctrl+L` address bar,
