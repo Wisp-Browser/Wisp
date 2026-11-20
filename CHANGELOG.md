@@ -6,6 +6,17 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-20
+
+### Changed (iPhone and iPad)
+- Real Liquid Glass on iOS 26:
+  - Back, tabs and the menu button are native glass buttons.
+  - The menu is a native iOS menu that morphs out of the button.
+  - All glass (bar, address pill, bookmarks bar) shares one glass container, and appears and
+    disappears with the system's materialize animation.
+- The menu panel now grows from the menu button (it came out of the back button before).
+- Bigger logo on the app icon, plus Dark and Tinted icons (iOS 18+) with transparent backgrounds.
+
 ## [0.2.4] - 2026-11-20
 
 ### Added
