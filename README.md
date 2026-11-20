@@ -18,9 +18,9 @@
 ## Features
 
 - **Glass interface**: frosted surfaces on the Windows 11 Mica backdrop (or a solid Flat style), three layouts
-  (Classic, Compact, Vertical), smooth animations that respect reduce-motion, light and dark themes, true full screen.
+  (Classic, Compact, Vertical), smooth animations that respect reduce-motion, light and dark themes, true full screen, choice of interface font.
 - **Tabs**: horizontal or vertical (collapsible sidebar), drag to reorder, pinned tabs, mute, duplicate,
-  idle-tab hibernation, session restore.
+  session restore, and a Memory saver that unloads background tabs so 15+ open tabs stay around 150–250 MB.
 - **Spaces**: named, colour-coded workspaces, each with its own tabs, pins, wallpaper and cookie profile (`Alt+1…9`).
 - **Split screen**: 2 to 4 panes. Drag a tab to an edge; drag the gaps to resize.
 - **Omnibox and command palette**: search prefixes (`d cats`, `g rust`, `k …`), suggestions, `Ctrl+K` for everything.

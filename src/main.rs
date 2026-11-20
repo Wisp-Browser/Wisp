@@ -205,7 +205,9 @@ enum Ev {
     Ready(usize),
     LoadStart(usize),
     MakeSpare(usize),
-    Hibernate(usize),
+    HibernateAt(usize, f64),
+    /// Give unused engine memory back to Windows (see `release_memory`).
+    Release,
     Navigate(usize, String),
     DlStart(String, String, String),
     DlDone(String, Option<String>, bool),
@@ -228,6 +230,10 @@ struct Tab {
     pos: usize,
     muted: bool,
     last_active: Instant,
+    /// The page's memory target is lowered while it is hidden.
+    low: bool,
+    /// Scroll position to restore after a hibernated tab reloads.
+    scroll: f64,
     opened: bool,
     ready: bool,
     block: Option<Arc<blocker::TabBlock>>,
@@ -246,6 +252,8 @@ impl Tab {
             pos: 0,
             muted: false,
             last_active: Instant::now(),
+            low: false,
+            scroll: 0.0,
             opened: false,
             ready: false,
             block: None,
@@ -296,6 +304,106 @@ fn shown(u: &str) -> String {
     }
 }
 
+/// Run in a background tab before unloading it: -1 keeps it (media playing, or text typed into
+/// a form), otherwise its scroll position.
+const KEEP_ALIVE_JS: &str = "(()=>{const m=[...document.querySelectorAll('video,audio')].some(m=>!m.paused&&!m.ended),f=[...document.querySelectorAll('textarea,input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button])')].some(e=>e.value&&e.value!==e.defaultValue)||!!(document.activeElement&&document.activeElement.isContentEditable);return (m||f)?-1:Math.round(scrollY)})()";
+
+/// Wisp's window is the active (foreground) window and not minimized.
+#[cfg(windows)]
+fn is_foreground(window: &Window) -> bool {
+    use tao::platform::windows::WindowExtWindows;
+    use windows::Win32::{
+        Foundation::HWND,
+        UI::WindowsAndMessaging::{GetForegroundWindow, IsIconic},
+    };
+    let me = HWND(window.hwnd() as _);
+    // SAFETY: read-only window queries.
+    unsafe { GetForegroundWindow() == me && !IsIconic(me).as_bool() }
+}
+#[cfg(not(windows))]
+fn is_foreground(_window: &Window) -> bool {
+    true
+}
+
+/// Give memory the engine is not using back to Windows: empties the working sets of the WebView2
+/// processes behind `views` (one view per browser environment is enough). Pages a process still
+/// needs come straight back on use; the rest (caches, leftovers of unloaded tabs, GPU buffers)
+/// stays out of RAM. With `pages: false` page (renderer) processes are skipped, so the page you
+/// are using is never touched.
+#[cfg(windows)]
+fn release_memory(views: &[&WebView], pages: bool) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2Environment8, ICoreWebView2_2, COREWEBVIEW2_PROCESS_KIND, COREWEBVIEW2_PROCESS_KIND_RENDERER,
+    };
+    use windows::core::Interface;
+    use windows::Win32::{
+        Foundation::CloseHandle,
+        System::{
+            ProcessStatus::K32EmptyWorkingSet,
+            Threading::{GetCurrentProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA},
+        },
+    };
+    use wry::WebViewExtWindows;
+    let mut pids: Vec<u32> = vec![];
+    for v in views {
+        // SAFETY: COM calls on live WebView2 objects owned by this thread.
+        unsafe {
+            let Ok(wv) = v.controller().CoreWebView2() else { continue };
+            let Ok(env) = wv.cast::<ICoreWebView2_2>().and_then(|w| w.Environment()) else {
+                continue;
+            };
+            let Ok(list) = env.cast::<ICoreWebView2Environment8>().and_then(|e| e.GetProcessInfos()) else {
+                continue;
+            };
+            let mut n = 0u32;
+            let _ = list.Count(&mut n);
+            for i in 0..n {
+                let Ok(info) = list.GetValueAtIndex(i) else { continue };
+                let (mut pid, mut kind) = (0i32, COREWEBVIEW2_PROCESS_KIND::default());
+                if info.ProcessId(&mut pid).is_err() || info.Kind(&mut kind).is_err() {
+                    continue;
+                }
+                if (pages || kind != COREWEBVIEW2_PROCESS_KIND_RENDERER) && pid > 0 && !pids.contains(&(pid as u32)) {
+                    pids.push(pid as u32);
+                }
+            }
+        }
+    }
+    // SAFETY: plain handle use on our own child processes; every handle is closed.
+    unsafe {
+        for pid in pids {
+            if let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA, false, pid) {
+                let _ = K32EmptyWorkingSet(h);
+                let _ = CloseHandle(h);
+            }
+        }
+        let _ = K32EmptyWorkingSet(GetCurrentProcess());
+    }
+}
+#[cfg(not(windows))]
+fn release_memory(_views: &[&WebView], _pages: bool) {}
+
+/// Ask WebView2 to trim a page's memory (hidden tabs) or return it to normal.
+#[cfg(windows)]
+fn set_low_memory(v: &WebView, low: bool) {
+    use wry::{MemoryUsageLevel, WebViewExtWindows};
+    let _ = v.set_memory_usage_level(if low { MemoryUsageLevel::Low } else { MemoryUsageLevel::Normal });
+}
+#[cfg(not(windows))]
+fn set_low_memory(_v: &WebView, _low: bool) {}
+
+/// Engine switches shared by every webview (they must match for views to share one browser
+/// process). wry's defaults (no mini menu, no SmartScreen) plus memory savers.
+#[cfg(windows)]
+fn browser_args() -> String {
+    let mut a = String::from("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection");
+    if let Ok(x) = std::env::var("WISP_BROWSER_ARGS") {
+        a.push(' ');
+        a.push_str(&x);
+    }
+    a
+}
+
 /// Single place where child webviews are attached to the window.
 fn base_builder(window: &Window) -> WebViewBuilder<'_> {
     let b = WebViewBuilder::new_as_child(window);
@@ -304,6 +412,7 @@ fn base_builder(window: &Window) -> WebViewBuilder<'_> {
     let b = {
         use wry::{ScrollBarStyle, WebViewBuilderExtWindows};
         b.with_scroll_bar_style(ScrollBarStyle::FluentOverlay)
+            .with_additional_browser_args(browser_args())
     };
     b
 }
@@ -631,6 +740,11 @@ struct App {
     ai_web_hide: bool,
     /// Last chrome shape sent (page areas + menu rects), to skip redundant updates.
     chrome_shape: String,
+    /// Wisp is the foreground window (memory is released more fully while it isn't).
+    focused: bool,
+    last_release: Instant,
+    /// A memory release is already scheduled.
+    release_due: bool,
     holes: Vec<(R, f64)>,
     elem_fs: Option<usize>,
     pending: HashMap<String, Pending>,
@@ -922,8 +1036,8 @@ impl App {
                 .tabs
                 .iter()
                 .any(|t| ids.contains(&t.id) && t.view.is_some() && !t.ready);
-        for (si, sp) in self.spaces.iter().enumerate() {
-            for t in &sp.tabs {
+        for (si, sp) in self.spaces.iter_mut().enumerate() {
+            for t in sp.tabs.iter_mut() {
                 if let Some(v) = &t.view {
                     let idx = if si == cur { ids.iter().position(|x| *x == t.id) } else { None };
                     match idx {
@@ -932,10 +1046,19 @@ impl App {
                             if t.ready {
                                 let _ = v.set_visible(true);
                             }
+                            if t.low {
+                                t.low = false;
+                                set_low_memory(v, false);
+                            }
                         }
                         _ => {
                             if !hold {
                                 let _ = v.set_visible(false);
+                                // Hidden pages drop caches and trim their memory right away.
+                                if !t.low && t.ready {
+                                    t.low = true;
+                                    set_low_memory(v, true);
+                                }
                             }
                         }
                     }
@@ -1232,7 +1355,7 @@ impl App {
             "ai":{"open":self.ai_open,"w":self.ai_w,"keys":self.keys,"cfg":self.settings.ai},
             "private":store::is_private(),"version":env!("CARGO_PKG_VERSION"),"fullscreen":self.fullscreen,
             "s":{"suggest":self.settings.suggest,"blocker":self.settings.blocker,"https_only":self.settings.https_only,
-                 "hibernate_min":self.settings.hibernate_min,"shortcuts":self.settings.shortcuts,"auto_update":self.settings.auto_update,
+                 "hibernate_s":self.settings.hibernate_s,"shortcuts":self.settings.shortcuts,"auto_update":self.settings.auto_update,
                  "channel":self.settings.channel,"block_off":self.settings.block_off},
             "page":page,
             "update":{"ready":self.update_ready},
@@ -2071,7 +2194,37 @@ impl App {
         self.push_state();
     }
 
+    /// Release unused engine memory shortly (batched, so unloading many tabs releases once).
+    fn schedule_release(&mut self, ms: u64) {
+        if self.settings.hibernate_s == 0 || self.release_due {
+            return;
+        }
+        self.release_due = true;
+        let p = self.proxy.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(ms));
+            let _ = p.send_event(Ev::Release);
+        });
+    }
+
+    fn release_now(&mut self) {
+        if self.settings.hibernate_s == 0 {
+            return;
+        }
+        self.focused = is_foreground(&self.window);
+        self.last_release = Instant::now();
+        let mut views: Vec<&WebView> = vec![&self.chrome];
+        views.extend(self.spaces.iter().filter_map(|s| s.tabs.iter().find_map(|t| t.view.as_ref())));
+        views.extend(self.ai_web.as_ref());
+        // In the background everything goes, pages included; in use, the pages are left alone.
+        release_memory(&views, !self.focused);
+    }
+
     fn hibernate(&mut self, id: usize) {
+        self.hibernate_at(id, 0.0);
+    }
+
+    fn hibernate_at(&mut self, id: usize, scroll: f64) {
         let cur = self.cur;
         let (visible, _) = self.spaces[cur].visible(R::default());
         let Some((si, ti)) = self.find_tab(id) else { return };
@@ -2082,39 +2235,60 @@ impl App {
         if let Some(v) = t.view.take() {
             t.hist = vec![t.url.clone()];
             t.pos = 0;
+            t.low = false;
+            t.scroll = scroll;
             t.block = None;
             t.loading = false;
             t.ready = false;
             self.bury(v);
             self.push_state();
+            // After the page is destroyed (bury takes ~1s), give its leftovers back.
+            self.schedule_release(2500);
         }
     }
 
+    /// Memory saver: tabs that have been out of sight for `hibernate_s` seconds are unloaded
+    /// (their page is destroyed and reloads when clicked, at the same scroll position).
     fn tick(&mut self) {
-        let mins = self.settings.hibernate_min;
-        if mins == 0 {
+        let secs = self.settings.hibernate_s;
+        if secs == 0 {
+            return;
+        }
+        // Gone to the background: give memory back now, then again each minute (pages playing music
+        // or running timers build some up again).
+        let fg = is_foreground(&self.window);
+        if !fg && (self.focused || self.last_release.elapsed() > Duration::from_secs(60)) {
+            self.schedule_release(0);
+        }
+        self.focused = fg;
+        // A download belongs to the page that started it; unloading that page would cancel it.
+        if self.downloads.iter().any(|d| d.state == "progress") {
             return;
         }
         let cur = self.cur;
         let (visible, _) = self.spaces[cur].visible(R::default());
-        let limit = Duration::from_secs(mins as u64 * 60);
-        for (si, s) in self.spaces.iter().enumerate() {
-            for t in &s.tabs {
-                if let Some(v) = &t.view {
-                    if (si == cur && visible.contains(&t.id)) || t.last_active.elapsed() < limit || t.url == NEWTAB_ID {
-                        continue;
-                    }
-                    let (proxy, id) = (self.proxy.clone(), t.id);
-                    // Never hibernate a tab that is playing media.
-                    let _ = v.evaluate_script_with_callback(
-                        "[...document.querySelectorAll('video,audio')].some(m=>!m.paused&&!m.ended)",
-                        move |r| {
-                            if r.trim() == "false" {
-                                let _ = proxy.send_event(Ev::Hibernate(id));
-                            }
-                        },
-                    );
+        let now = Instant::now();
+        let limit = Duration::from_secs(secs as u64);
+        for (si, s) in self.spaces.iter_mut().enumerate() {
+            for t in s.tabs.iter_mut() {
+                let Some(v) = &t.view else { continue };
+                if si == cur && visible.contains(&t.id) {
+                    t.last_active = now;
+                    continue;
                 }
+                if t.last_active.elapsed() < limit || !t.ready {
+                    continue;
+                }
+                let (proxy, id) = (self.proxy.clone(), t.id);
+                // Keep tabs playing audio/video and tabs with text typed into a form; remember
+                // the scroll position of the rest.
+                let _ = v.evaluate_script_with_callback(KEEP_ALIVE_JS, move |r| {
+                    if let Ok(y) = r.trim().parse::<f64>() {
+                        if y >= 0.0 {
+                            let _ = proxy.send_event(Ev::HibernateAt(id, y));
+                        }
+                    }
+                });
             }
         }
     }
@@ -2226,7 +2400,7 @@ impl App {
             }
             "suggest" => self.settings.suggest = v.as_bool().unwrap_or(true),
             "auto_update" => self.settings.auto_update = v.as_bool().unwrap_or(true),
-            "hibernate_min" => self.settings.hibernate_min = v.as_u64().unwrap_or(20).min(240) as u32,
+            "hibernate_s" => self.settings.hibernate_s = v.as_u64().unwrap_or(30).min(4 * 3600) as u32,
             "channel" => {
                 self.settings.channel = if v.as_str() == Some("beta") {
                     "beta".into()
@@ -2450,7 +2624,11 @@ impl App {
                 self.push_state();
             }
             Ev::MakeSpare(sid) => self.make_spare(sid),
-            Ev::Hibernate(id) => self.hibernate(id),
+            Ev::HibernateAt(id, y) => self.hibernate_at(id, y),
+            Ev::Release => {
+                self.release_due = false;
+                self.release_now();
+            }
             Ev::FindCount(n) => self.chrome_emit(json!({"type":"findcount","n":n})),
             Ev::Navigate(id, u) => {
                 if let Some((si, ti)) = self.find_tab(id) {
@@ -2569,6 +2747,12 @@ impl App {
                     visit = Some((t.url.clone(), t.title.clone()));
                     if let (Some(v), Some(h)) = (&t.view, host_of(&t.url)) {
                         let _ = v.zoom(self.settings.zoom.get(&h).copied().unwrap_or(1.0));
+                    }
+                    if t.scroll > 0.0 {
+                        if let Some(v) = &t.view {
+                            let _ = v.evaluate_script(&format!("scrollTo(0,{})", t.scroll));
+                        }
+                        t.scroll = 0.0;
                     }
                 }
                 if let (Some((u, t)), false) = (visit, store::is_private()) {
@@ -2820,7 +3004,7 @@ fn main() {
     {
         let p = proxy.clone();
         std::thread::spawn(move || loop {
-            std::thread::sleep(Duration::from_secs(60));
+            std::thread::sleep(Duration::from_secs(10));
             if p.send_event(Ev::Tick).is_err() {
                 break;
             }
@@ -2862,6 +3046,9 @@ fn main() {
         ai_web_url: None,
         ai_web_hide: false,
         chrome_shape: String::new(),
+        focused: true,
+        release_due: false,
+        last_release: Instant::now(),
         holes: vec![],
         elem_fs: None,
         pending: HashMap::new(),
@@ -2931,6 +3118,11 @@ fn main() {
                 event: WindowEvent::Focused(true),
                 ..
             } => app.sync_backdrop(),
+            // Wisp went to the background: hand its unused memory back to Windows shortly.
+            Event::WindowEvent {
+                event: WindowEvent::Focused(false),
+                ..
+            } => app.schedule_release(3000),
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..

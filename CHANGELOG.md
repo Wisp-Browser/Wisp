@@ -6,6 +6,26 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-20
+
+Includes everything from 0.2.2-beta.1 and 0.2.2-beta.2 (smooth corners, Settings clipping fix,
+font setting).
+
+### Added
+- Memory saver (Settings → Tabs): tabs you aren't looking at are unloaded after 30 seconds by default
+  (Maximum), 5 minutes (Balanced), 30 minutes (Moderate) or never (Off). They reload when clicked, at the
+  same scroll position. Tabs playing audio or video, tabs with text typed into a form, and all tabs
+  while a download is running are kept.
+- Hidden tabs lower their memory target right away, before they are unloaded.
+- Wisp hands memory its engine is no longer using back to Windows after tabs unload, and fully while
+  it is in the background. With 15 tabs open, Wisp's total memory went from about 2.2 GB to about
+  130–250 MB in use and about 135 MB in the background (depends on the open page).
+- `WISP_DATA_DIR` environment variable runs Wisp on a separate data folder.
+
+### Changed
+- The old "Hibernate inactive tabs" minutes setting is replaced by Memory saver; existing installs move
+  to Maximum.
+
 ## [0.2.2-beta.2] - 2026-11-20
 
 ### Added

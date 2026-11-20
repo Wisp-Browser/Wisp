@@ -39,6 +39,10 @@ pub fn cleanup_private() {
 
 /// The normal (non-private) data directory.
 pub fn real_data_dir() -> PathBuf {
+    // WISP_DATA_DIR runs Wisp on a separate data folder (testing, portable use).
+    if let Some(d) = std::env::var_os("WISP_DATA_DIR").filter(|d| !d.is_empty()) {
+        return PathBuf::from(d);
+    }
     dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("Wisp")
 }
 
@@ -60,7 +64,8 @@ pub struct Settings {
     pub suggest: bool,
     pub blocker: bool,
     pub https_only: bool,
-    pub hibernate_min: u32,
+    /// Memory saver: unload tabs hidden for this many seconds (0 = off).
+    pub hibernate_s: u32,
     pub shortcuts: Value,
     pub zoom: std::collections::HashMap<String, f64>,
     pub block_off: Vec<String>,
@@ -89,7 +94,7 @@ impl Default for Settings {
             suggest: true,
             blocker: true,
             https_only: false,
-            hibernate_min: 20,
+            hibernate_s: 30,
             shortcuts: Value::Null,
             zoom: Default::default(),
             block_off: vec![],

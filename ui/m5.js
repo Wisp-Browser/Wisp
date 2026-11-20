@@ -229,7 +229,7 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
   ${row('HTTPS-only mode','Upgrades http:// sites to https://. Local addresses and custom ports are left alone. A site without HTTPS will not load while this is on.',tg(s.https_only,'https_only'))}
   ${row('Camera, microphone & location','Sites ask for permission the first time and Windows remembers your choice per site.','')}
   <div class="sub"><b>Clear browsing data</b><div class="clr"><label><input type="checkbox" id="c_h" checked> Browsing history</label><label><input type="checkbox" id="c_c"> Cookies & site data</label><button class="pbtn" data-act="clear">Clear</button></div></div>`;
- if(setSec==='tabs')h=`<h2>Tabs</h2>${row('Hibernate inactive tabs','Frees memory by unloading tabs you haven’t used. They reload when you click them. Tabs playing audio or video are never hibernated.',`<div class="seg">${[[0,'Off'],[10,'10 min'],[20,'20 min'],[30,'30 min'],[60,'1 hour']].map(([v,n])=>`<button data-hib="${v}" class="${s.hibernate_min===v?'on':''}">${n}</button>`).join('')}</div>`)}
+ if(setSec==='tabs')h=`<h2>Tabs</h2>${row('Memory saver','Unloads tabs you aren’t looking at so Wisp stays light. They reload when you click them, at the same scroll position. Tabs playing audio or video, or with text typed into a form, are kept.',`<div class="seg">${[[30,'Maximum'],[300,'Balanced'],[1800,'Moderate'],[0,'Off']].map(([v,n])=>`<button data-hib="${v}" class="${s.hibernate_s===v?'on':''}" title="${v?'After '+(v<60?v+' seconds':v/60+' minutes')+' in the background':'Never unload tabs'}">${n}</button>`).join('')}</div>`)}
   ${row('Hibernate background tabs now','',`<button class="pbtn" data-c="hibernate">Hibernate now</button>`)}`;
  if(setSec==='shortcuts')h=`<h2>Keyboard shortcuts</h2><p class="hint">Click a shortcut, then press the new keys. Backspace clears it, Esc cancels.</p>`+CMDS.filter(c=>!c.hide).map(c=>`<div class="srow"><span>${esc(c.name)}</span><button class="key ${capturing===c.id?'cap':''}" data-key="${c.id}">${capturing===c.id?'Press keys…':esc(pretty(eff(c)))}</button></div>`).join('')+`<div class="srow"><span>Go to space 1–9</span><span class="key static">Alt + 1…9</span></div><button class="pbtn" data-act="resetkeys" style="margin-top:12px">Reset all shortcuts</button>`;
  if(setSec==='bookmarks')h=`<h2>Bookmarks</h2><p class="hint">Import your bookmarks from another browser. Nothing is deleted from it.</p>${srcs.map(x=>`<div class="srow"><span>${esc(x.label)}</span><button class="pbtn" data-imp="${x.id}">Import</button></div>`).join('')||'<div class="none sm">No other browsers found automatically.</div>'}
@@ -246,7 +246,7 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
  $('#setx').onclick=closeSettings;
  b.querySelectorAll('[data-set]').forEach(x=>x.onclick=()=>{act('set',{k:x.dataset.set,v:!s[x.dataset.set]})});
  b.querySelectorAll('[data-eng]').forEach(x=>x.onclick=()=>act('engine',{id:x.dataset.eng}));
- b.querySelectorAll('[data-hib]').forEach(x=>x.onclick=()=>act('set',{k:'hibernate_min',v:+x.dataset.hib}));
+ b.querySelectorAll('[data-hib]').forEach(x=>x.onclick=()=>act('set',{k:'hibernate_s',v:+x.dataset.hib}));
  b.querySelectorAll('[data-ch]').forEach(x=>x.onclick=()=>act('set',{k:'channel',v:x.dataset.ch}));
  b.querySelectorAll('[data-un]').forEach(x=>x.onclick=()=>act('set',{k:'unblock_site',v:x.dataset.un}));
  b.querySelectorAll('[data-imp]').forEach(x=>x.onclick=()=>act('import',{src:x.dataset.imp}));
