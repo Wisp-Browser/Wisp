@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Wisp for iOS app icon: full-bleed and opaque (iOS rounds the corners), logo at ~55%. -->
+  <!-- Wisp for iOS app icon: full-bleed and opaque (iOS rounds the corners), logo at ~70%. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#2a2140"/>
@@ -17,7 +17,7 @@
   </defs>
   <rect width="1024" height="1024" fill="url(#bg)"/>
   <rect width="1024" height="1024" fill="url(#glow)"/>
-  <g transform="translate(512 520) scale(9.6) translate(-32 -33)" fill="none">
+  <g transform="translate(512 524) scale(13) translate(-32 -33)" fill="none">
     <path d="M9 17C12 39 17 51 23 51 29 51 29 31 32 29 35 31 35 51 41 51 47 51 52 39 55 17" stroke="url(#g)" stroke-opacity=".28" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M9 17C12 39 17 51 23 51 29 51 29 31 32 29 35 31 35 51 41 51 47 51 52 39 55 17" stroke="url(#g)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
     <circle cx="32" cy="14" r="3.8" fill="#ffd2bf"/>

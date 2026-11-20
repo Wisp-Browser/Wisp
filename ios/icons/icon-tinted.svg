@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Tinted app icon (grayscale): transparent; iOS supplies the dark backdrop. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a2140"/>
+      <stop offset="1" stop-color="#121019"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="430" r="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6e6e6" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#e6e6e6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="g" x1="8" y1="10" x2="56" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".55" stop-color="#e6e6e6"/>
+      <stop offset="1" stop-color="#c8c8c8"/>
+    </linearGradient>
+  </defs>
+    <g transform="translate(512 524) scale(13) translate(-32 -33)" fill="none">
+    <path d="M9 17C12 39 17 51 23 51 29 51 29 31 32 29 35 31 35 51 41 51 47 51 52 39 55 17" stroke="url(#g)" stroke-opacity=".28" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9 17C12 39 17 51 23 51 29 51 29 31 32 29 35 31 35 51 41 51 47 51 52 39 55 17" stroke="url(#g)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="32" cy="14" r="3.8" fill="#ffffff"/>
+  </g>
+</svg>

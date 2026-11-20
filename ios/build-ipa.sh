@@ -23,12 +23,23 @@ sed -e "s/__VERSION__/$PLIST_VERSION/" -e "s/__BUILD__/$BUILD/" Info.plist > "$A
 plutil -lint "$APP/Info.plist"
 printf 'APPL????' > "$APP/PkgInfo"
 
-# Home-screen icons, scaled down from the 1024px icon (rendered from icon.svg).
-ICON=AppIcon.png
-sips -z 120 120 "$ICON" --out "$APP/AppIcon60x60@2x.png" >/dev/null
-sips -z 180 180 "$ICON" --out "$APP/AppIcon60x60@3x.png" >/dev/null
-sips -z 152 152 "$ICON" --out "$APP/AppIcon76x76@2x~ipad.png" >/dev/null
-sips -z 167 167 "$ICON" --out "$APP/AppIcon83.5x83.5@2x~ipad.png" >/dev/null
+# Home-screen icon: an asset catalog with the normal icon plus the dark and tinted variants
+# (iOS 18+), which have transparent backgrounds so iOS draws just the logo on its own backdrop.
+XC=$OUT/Assets.xcassets
+SET=$XC/AppIcon.appiconset
+mkdir -p "$SET"
+cp AppIcon.png icons/AppIcon-Dark.png icons/AppIcon-Tinted.png "$SET/"
+printf '{"info":{"author":"xcode","version":1}}' > "$XC/Contents.json"
+cat > "$SET/Contents.json" <<'JSON'
+{"images":[
+ {"filename":"AppIcon.png","idiom":"universal","platform":"ios","size":"1024x1024"},
+ {"appearances":[{"appearance":"luminosity","value":"dark"}],"filename":"AppIcon-Dark.png","idiom":"universal","platform":"ios","size":"1024x1024"},
+ {"appearances":[{"appearance":"luminosity","value":"tinted"}],"filename":"AppIcon-Tinted.png","idiom":"universal","platform":"ios","size":"1024x1024"}
+],"info":{"author":"xcode","version":1}}
+JSON
+xcrun actool "$XC" --compile "$APP" --platform iphoneos --minimum-deployment-target 15.0 --app-icon AppIcon   --target-device iphone --target-device ipad --output-partial-info-plist "$OUT/icons.plist" --output-format human-readable-text
+/usr/libexec/PlistBuddy -c "Merge $OUT/icons.plist" "$APP/Info.plist"
+ls "$APP"
 
 codesign --force --sign - --timestamp=none "$APP"
 
