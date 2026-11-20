@@ -39,7 +39,9 @@ ShowInstDetails show
 ShowUninstDetails show
 CRCCheck on
 
-VIProductVersion "${VERSION}.0"
+;; The Windows file version must be numeric (X.X.X.X): drop any pre-release suffix such as "-beta.1".
+!searchparse /noerrors "${VERSION}-" "" VERSION_NUM "-"
+VIProductVersion "${VERSION_NUM}.0"
 VIAddVersionKey "ProductName" "Wisp"
 VIAddVersionKey "FileDescription" "Wisp installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
