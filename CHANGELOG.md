@@ -6,6 +6,8 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-21
+
 ### Changed
 - Opening a new tab (Ctrl+T, the + button, or closing the last tab) selects the address bar, so you
   can start typing right away, like Chrome. Pressing Enter there moves the keyboard to the page.
