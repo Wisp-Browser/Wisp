@@ -283,7 +283,7 @@ function applyChrome(){const glass=!!S.glass_on&&!!S.glass_ok,lay=SLOTS[S.layout
 const FONT_IDS=['inter','rounded','system','serif','mono'];
 function applyFont(f){const b=document.body.classList;FONT_IDS.forEach(k=>b.toggle('f-'+k,k===(f||'inter')))}
 // Bookmarks bar: click opens in this tab, middle- or Ctrl-click in a new tab.
-let bmSig='';const bmEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let bmSig='',urlTab=0;const bmEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function renderBm(){const on=!!S.bmbar&&(S.bms||[]).length>0;document.body.classList.toggle('hasbm',on);
  const sig=on?JSON.stringify(S.bms):'';if(sig===bmSig)return;bmSig=sig;
  $('#bml').innerHTML=on?S.bms.map(b=>`<button class="bmc" data-u="${bmEsc(b.url)}" title="${bmEsc(b.title)}\n${bmEsc(b.url)}"><i class="f">${ic(b)}</i><span>${bmEsc(b.title||b.url)}</span></button>`).join(''):'';
@@ -331,7 +331,9 @@ function render(){
   if($('#spm').classList.contains('open'))spMenu(true)}
   syncTabs();
   const a=S.tabs.find(t=>t.id===S.active);
-  if(a&&document.activeElement!==$('#url'))$('#url').value=a.url==='wisp://newtab'?'':a.url;
+  // Keep what's being typed, unless the user switched to another tab (then show that tab's address).
+  if(a&&(document.activeElement!==$('#url')||a.id!==urlTab)){$('#url').value=a.url==='wisp://newtab'?'':a.url}
+  urlTab=a?a.id:0;
   omniIcon(a);
   $('#back').disabled=!a||!a.back;$('#fwd').disabled=!a||!a.fwd;
   $('#unsplit').style.display=S.split?'flex':'none';
@@ -369,7 +371,10 @@ function cuts(c){const bg=$('#bg'),W=innerWidth,H=innerHeight,R=c.radius||12,lis
 let lastCuts=null;addEventListener('resize',()=>{if(lastCuts)cuts(lastCuts)});
 window.wisp={cuts:c=>{lastCuts=c;cuts(c)},state:s=>{S=Object.assign(S,s);render();if(window.AI)AI.state(S);if(window.M5)M5.state(S)},nt:n=>{S.nt=n;applyChrome();wall(n)},palette:()=>{if(window.M5)M5.palette()},ai:e=>window.AI&&AI.event(e)};
 // controls
-$('#url').addEventListener('keydown',e=>{if(e.key==='Enter'){send({t:'go',input:e.target.value});e.target.blur()}});
+$('#url').addEventListener('keydown',e=>{if(e.key==='Enter'){let v=e.target.value.trim();
+  // Ctrl+Enter, like Chrome: "example" -> www.example.com
+  if(e.ctrlKey&&v&&!/[\s.\/:]/.test(v))v='https://www.'+v+'.com';
+  send({t:'go',input:v});e.target.blur()}});
 $('#url').addEventListener('focus',e=>e.target.select());
 $('#new').onclick=$('#newh').onclick=()=>send({t:'new'});$('#back').onclick=()=>send({t:'back'});$('#fwd').onclick=()=>send({t:'fwd'});$('#rel').onclick=()=>send({t:'reload'});
 $('#aibtn').onclick=()=>AI.toggle();$('#unsplit').onclick=()=>send({t:'unsplit'});

@@ -6,6 +6,33 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-11-20
+
+### Added
+- Chrome's keyboard shortcuts:
+  - Ctrl+Shift+T reopens closed tabs (the last 25, in their own Space).
+  - Ctrl+1…8 / Ctrl+9 go to a tab / the last tab, and Ctrl+PgDn / Ctrl+PgUp switch tabs.
+  - Alt+Left / Right / Home go back, forward and to the New Tab page.
+  - F5 reloads, and Ctrl+Shift+R / Shift+F5 reload ignoring the cache.
+  - Alt+D / F6 / Ctrl+E focus the address bar, and Ctrl+Enter adds www. and .com.
+  - Ctrl+Shift+D bookmarks all tabs, Ctrl+Shift+B toggles the bookmarks bar, and Ctrl+J opens
+    downloads.
+  - Ctrl+G finds the next match, Ctrl+U shows the page source, and F12 / Ctrl+Shift+I open
+    developer tools.
+  - Ctrl+Shift+Delete clears browsing data, Alt+F opens the menu, and Ctrl+Shift+W closes the
+    window.
+  - A command can have several keys.
+- Import history from Chrome, Edge, Brave and Firefox, and from Google Takeout
+  (`Chrome/History.json`). Settings → Bookmarks & import.
+
+### Changed
+- To match Chrome:
+  - Wisp AI moves to Ctrl+Shift+Space (Ctrl+J is now downloads).
+  - Reader mode moves to F9 (Ctrl+Shift+R is now a hard reload).
+  - The per-site ad blocker toggle has no default shortcut.
+- Custom shortcuts you set are kept.
+- Switching tabs updates the address bar even while it has focus.
+
 ## [0.2.7] - 2026-11-20
 
 ### Added

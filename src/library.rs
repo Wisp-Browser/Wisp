@@ -2,6 +2,7 @@
 
 use crate::store;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -141,6 +142,43 @@ impl Library {
         };
         self.save_bookmarks();
         true
+    }
+
+    /// Add a bookmark if it isn't there yet. Returns true when it was added.
+    pub fn add_bookmark(&mut self, url: &str, title: &str) -> bool {
+        if !trackable(url) || self.is_bookmarked(url) {
+            return false;
+        }
+        self.bookmarks.push(Bookmark {
+            url: url.into(),
+            title: if title.is_empty() { url.into() } else { title.into() },
+            folder: String::new(),
+            ts: now(),
+        });
+        self.save_bookmarks();
+        true
+    }
+
+    /// Merge imported history. Pages already in Wisp keep the newer visit time and the higher
+    /// visit count (so importing twice doesn't double anything). Returns how many pages were new.
+    pub fn merge_history(&mut self, items: Vec<Visit>) -> usize {
+        let mut added = 0;
+        for v in items.into_iter().filter(|v| trackable(&v.url)) {
+            if let Some(h) = self.history.iter_mut().find(|h| h.url == v.url) {
+                h.ts = h.ts.max(v.ts);
+                h.n = h.n.max(v.n);
+                if h.title.is_empty() || h.title == h.url {
+                    h.title = v.title;
+                }
+            } else {
+                self.history.push(v);
+                added += 1;
+            }
+        }
+        self.history.sort_by_key(|v| std::cmp::Reverse(v.ts));
+        self.history.truncate(HISTORY_CAP);
+        self.save_history();
+        added
     }
 
     pub fn import(&mut self, items: Vec<Bookmark>) -> usize {
@@ -347,6 +385,92 @@ pub fn read_firefox(places: &Path) -> Result<Vec<Bookmark>, String> {
     res.map_err(|e| format!("Couldn't read Firefox bookmarks: {e}"))
 }
 
+/// Chrome-family browsers store times as microseconds since 1601-01-01.
+fn from_webkit_time(us: i64) -> u64 {
+    (us / 1_000_000 - 11_644_473_600).max(0) as u64
+}
+
+fn copy_db(path: &Path, what: &str) -> Result<PathBuf, String> {
+    let tmp = std::env::temp_dir().join(format!("wisp-{what}-{}.sqlite", std::process::id()));
+    std::fs::copy(path, &tmp).map_err(|_| format!("Couldn't read the {what} file. Close that browser and try again."))?;
+    Ok(tmp)
+}
+
+/// History from Chrome, Edge or Brave (`History`, next to their `Bookmarks` file) or Firefox
+/// (`places.sqlite`): the most recent pages, with titles, visit counts and last visit times.
+pub fn read_history(id: &str, path: &Path) -> Result<Vec<Visit>, String> {
+    let (db, sql, firefox) = if id == "firefox" {
+        (
+            path.to_path_buf(),
+            "SELECT url, title, visit_count, last_visit_date FROM moz_places \
+             WHERE url LIKE 'http%' AND last_visit_date IS NOT NULL ORDER BY last_visit_date DESC LIMIT 5000",
+            true,
+        )
+    } else {
+        (
+            path.with_file_name("History"),
+            "SELECT url, title, visit_count, last_visit_time FROM urls \
+             WHERE url LIKE 'http%' AND hidden = 0 ORDER BY last_visit_time DESC LIMIT 5000",
+            false,
+        )
+    };
+    if !db.is_file() {
+        return Err("Couldn't find that browser's history on this PC.".into());
+    }
+    let tmp = copy_db(&db, "history")?;
+    let res = (|| -> Result<Vec<Visit>, rusqlite::Error> {
+        let conn = rusqlite::Connection::open_with_flags(&tmp, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let mut st = conn.prepare(sql)?;
+        let rows = st.query_map([], |r| {
+            let t: i64 = r.get::<_, Option<i64>>(3)?.unwrap_or(0);
+            Ok(Visit {
+                url: r.get(0)?,
+                title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                n: r.get::<_, Option<i64>>(2)?.unwrap_or(1).max(1) as u32,
+                ts: if firefox {
+                    (t / 1_000_000).max(0) as u64
+                } else {
+                    from_webkit_time(t)
+                },
+            })
+        })?;
+        rows.collect()
+    })();
+    let _ = std::fs::remove_file(&tmp);
+    res.map_err(|e| format!("Couldn't read that browser's history: {e}"))
+}
+
+/// Chrome history from Google Takeout (`Chrome/History.json`): one entry per visit, combined
+/// here into one per page.
+pub fn parse_takeout_history(text: &str) -> Result<Vec<Visit>, String> {
+    let v: serde_json::Value = serde_json::from_str(text).map_err(|_| "That file isn't a Google Takeout history file.".to_string())?;
+    let list = v["Browser History"]
+        .as_array()
+        .ok_or("That file isn't Chrome history from Google Takeout (look for Chrome/History.json).")?;
+    let mut by_url: HashMap<String, Visit> = HashMap::new();
+    for e in list {
+        let Some(url) = e["url"].as_str().filter(|u| trackable(u)) else {
+            continue;
+        };
+        let ts = (e["time_usec"].as_i64().unwrap_or(0) / 1_000_000).max(0) as u64;
+        let title = e["title"].as_str().unwrap_or("").to_string();
+        let ent = by_url.entry(url.to_string()).or_insert(Visit {
+            url: url.to_string(),
+            title: String::new(),
+            ts: 0,
+            n: 0,
+        });
+        ent.n += 1;
+        if ts >= ent.ts {
+            ent.ts = ts;
+            if !title.is_empty() {
+                ent.title = title;
+            }
+        }
+    }
+    Ok(by_url.into_values().collect())
+}
+
 pub struct Source {
     pub id: &'static str,
     pub label: &'static str,
@@ -401,6 +525,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn webkit_and_takeout_times() {
+        // 2024-01-01T00:00:00Z
+        assert_eq!(from_webkit_time(13_348_540_800_000_000), 1_704_067_200);
+        let t = r#"{"Browser History":[
+            {"title":"A","url":"https://a.example/","time_usec":1704067200000000},
+            {"title":"A newer","url":"https://a.example/","time_usec":1704067300000000},
+            {"title":"skip","url":"chrome://settings","time_usec":1},
+            {"title":"B","url":"https://b.example/","time_usec":1704067250000000}]}"#;
+        let mut v = parse_takeout_history(t).unwrap();
+        v.sort_by(|a, b| a.url.cmp(&b.url));
+        assert_eq!(v.len(), 2);
+        assert_eq!((v[0].n, v[0].ts, v[0].title.as_str()), (2, 1_704_067_300, "A newer"));
+        assert!(parse_takeout_history("{}").is_err());
+    }
+
+    #[test]
     fn chrome_json() {
         let j = r#"{"roots":{"bookmark_bar":{"type":"folder","name":"Bookmarks bar","children":[
           {"type":"url","name":"Rust","url":"https://rust-lang.org/"},
@@ -423,6 +563,29 @@ mod tests {
             ("https://a.com/?x=1&y=2", "Site & A", "News")
         );
         assert_eq!(b[1].folder, "");
+    }
+
+    #[test]
+    fn chrome_history() {
+        let dir = std::env::temp_dir().join(format!("wisp-test-chrome-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let hist = dir.join("History");
+        let _ = std::fs::remove_file(&hist);
+        {
+            let c = rusqlite::Connection::open(&hist).unwrap();
+            c.execute_batch(
+                "CREATE TABLE urls(id INTEGER PRIMARY KEY, url TEXT, title TEXT, visit_count INTEGER, last_visit_time INTEGER, hidden INTEGER);
+                 INSERT INTO urls VALUES(1,'https://a.example/','A',5,13348540800000000,0),
+                                        (2,'chrome://settings/','S',1,13348540800000000,0),
+                                        (3,'https://hidden.example/','H',1,13348540800000000,1);",
+            )
+            .unwrap();
+        }
+        // Found next to the Bookmarks file, like a real profile.
+        let v = read_history("chrome", &dir.join("Bookmarks")).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(v.len(), 1);
+        assert_eq!((v[0].url.as_str(), v[0].n, v[0].ts), ("https://a.example/", 5, 1_704_067_200));
     }
 
     #[test]

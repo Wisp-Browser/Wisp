@@ -214,6 +214,9 @@ enum Ev {
     DlDone(String, Option<String>, bool),
     Sugg(u64, Vec<String>),
     Imported(Result<Vec<library::Bookmark>, String>),
+    HistImported(Result<Vec<library::Visit>, String>),
+    /// F12 pressed in Wisp's own interface: open the active page's developer tools.
+    DevTools,
     FindCount(usize),
     Upd(String),
     Engine(Arc<blocker::Engine>, String),
@@ -482,6 +485,56 @@ fn set_normal_frame(window: &Window, (x, y, w, h): (i32, i32, u32, u32)) {
 #[cfg(not(windows))]
 fn set_normal_frame(_window: &Window, _f: (i32, i32, u32, u32)) {}
 
+/// The engine keeps F12 from reaching Wisp's interface (its developer tools are off), so catch it
+/// there and open the active page's developer tools instead, like Chrome.
+#[cfg(windows)]
+fn route_f12(chrome: &WebView, proxy: EventLoopProxy<Ev>) {
+    use webview2_com::AcceleratorKeyPressedEventHandler;
+    use webview2_com::Microsoft::Web::WebView2::Win32::{COREWEBVIEW2_KEY_EVENT_KIND, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN};
+    use wry::WebViewExtWindows;
+    let handler = AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
+        let Some(args) = args else { return Ok(()) };
+        let (mut key, mut kind) = (0u32, COREWEBVIEW2_KEY_EVENT_KIND::default());
+        // SAFETY: reading and marking the event args WebView2 just handed us.
+        unsafe {
+            args.VirtualKey(&mut key)?;
+            args.KeyEventKind(&mut kind)?;
+            if key == 0x7B && kind == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN {
+                args.SetHandled(true)?;
+                let _ = proxy.send_event(Ev::DevTools);
+            }
+        }
+        Ok(())
+    }));
+    let mut token = Default::default();
+    // SAFETY: registers the handler on the chrome's own controller.
+    let _ = unsafe { chrome.controller().add_AcceleratorKeyPressed(&handler, &mut token) };
+}
+#[cfg(not(windows))]
+fn route_f12(_chrome: &WebView, _proxy: EventLoopProxy<Ev>) {}
+
+/// Reload the page ignoring the cache (Ctrl+Shift+R / Shift+F5), through the DevTools protocol.
+#[cfg(windows)]
+fn hard_reload(v: &WebView) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CallDevToolsProtocolMethodCompletedHandler;
+    use windows::core::w;
+    use wry::WebViewExtWindows;
+    // SAFETY: COM call on a live WebView2 owned by this thread.
+    unsafe {
+        if let Ok(wv) = v.controller().CoreWebView2() {
+            let _ = wv.CallDevToolsProtocolMethod(
+                w!("Page.reload"),
+                w!("{\"ignoreCache\":true}"),
+                None::<&ICoreWebView2CallDevToolsProtocolMethodCompletedHandler>,
+            );
+        }
+    }
+}
+#[cfg(not(windows))]
+fn hard_reload(v: &WebView) {
+    let _ = v.evaluate_script("location.reload()");
+}
+
 /// Single place where child webviews are attached to the window.
 fn base_builder(window: &Window) -> WebViewBuilder<'_> {
     let b = WebViewBuilder::new_as_child(window);
@@ -490,6 +543,7 @@ fn base_builder(window: &Window) -> WebViewBuilder<'_> {
     let b = {
         use wry::{ScrollBarStyle, WebViewBuilderExtWindows};
         b.with_scroll_bar_style(ScrollBarStyle::FluentOverlay)
+            .with_devtools(true)
             .with_additional_browser_args(browser_args())
     };
     b
@@ -823,6 +877,8 @@ struct App {
     last_release: Instant,
     /// A memory release is already scheduled.
     release_due: bool,
+    /// Recently closed tabs (space id, address), newest last, for Ctrl+Shift+T.
+    closed: Vec<(usize, String)>,
     /// How the window was left last time, brought back on the first show.
     restore: Option<WinState>,
     /// The normal frame from just before full screen (full screen resizes the window itself, so
@@ -1559,6 +1615,12 @@ impl App {
     fn close(&mut self, id: usize) {
         let Some((si, ti)) = self.find_tab(id) else { return };
         let removed = self.spaces[si].tabs.remove(ti);
+        if removed.url.starts_with("http") {
+            self.closed.push((self.spaces[si].id, removed.url.clone()));
+            if self.closed.len() > 25 {
+                self.closed.remove(0);
+            }
+        }
         if let Some(v) = removed.view {
             self.bury(v);
         }
@@ -2007,6 +2069,51 @@ impl App {
             "go" => {
                 let target = from.unwrap_or(self.space().active);
                 self.navigate(target, &s("input"));
+            }
+            // Ctrl+Shift+T: bring back the most recently closed tab (in its own space if it still exists).
+            "reopen" => {
+                if let Some((sid, url)) = self.closed.pop() {
+                    if let Some(si) = self.spaces.iter().position(|s| s.id == sid) {
+                        if si != self.cur {
+                            self.switch_space(si);
+                        }
+                    }
+                    self.open_tab(&url, false);
+                } else {
+                    self.toast("No recently closed tabs");
+                }
+            }
+            "hard_reload" => {
+                if let Some(v) = self.active_view() {
+                    hard_reload(v);
+                }
+            }
+            "home" => {
+                let a = self.space().active;
+                self.navigate(a, NEWTAB_ID);
+            }
+            "bm_all" => {
+                let tabs: Vec<(String, String)> = self.space().tabs.iter().map(|t| (t.url.clone(), t.title.clone())).collect();
+                let n = tabs.iter().filter(|(u, t)| self.lib.add_bookmark(u, t)).count();
+                self.toast(&match n {
+                    0 => "All tabs are already bookmarked".to_string(),
+                    1 => "Bookmarked 1 tab".to_string(),
+                    n => format!("Bookmarked {n} tabs"),
+                });
+                self.bookmarks_changed();
+            }
+            "devtools" => {
+                if let Some(v) = self.active_view() {
+                    v.open_devtools();
+                }
+            }
+            "view_source" => {
+                let a = self.space().active;
+                if let Some(u) = self.space().tabs.iter().find(|t| t.id == a).map(|t| t.url.clone()) {
+                    if u.starts_with("http") {
+                        self.open_tab(&format!("view-source:{u}"), false);
+                    }
+                }
             }
             "back" | "fwd" | "reload" => {
                 let js = match t {
@@ -2481,6 +2588,32 @@ impl App {
     fn import(&mut self, src: &str) {
         let proxy = self.proxy.clone();
         let src = src.to_string();
+        // History: from another browser on this PC ("hist:chrome") or Google Takeout's History.json.
+        if src == "takeout" || src.starts_with("hist:") {
+            let p2 = self.proxy.clone();
+            std::thread::spawn(move || {
+                let res = if src == "takeout" {
+                    match rfd::FileDialog::new()
+                        .set_title("Google Takeout: Chrome/History.json")
+                        .add_filter("Chrome history (History.json)", &["json"])
+                        .pick_file()
+                    {
+                        Some(p) => std::fs::read_to_string(&p)
+                            .map_err(|e| e.to_string())
+                            .and_then(|t| library::parse_takeout_history(&t)),
+                        None => return,
+                    }
+                } else {
+                    let id = &src[5..];
+                    match library::detect_sources().into_iter().find(|s| s.id == id) {
+                        Some(s) => library::read_history(s.id, &s.path),
+                        None => Err("Couldn't find that browser on this PC.".to_string()),
+                    }
+                };
+                let _ = p2.send_event(Ev::HistImported(res));
+            });
+            return;
+        }
         std::thread::spawn(move || {
             let res = if src == "html" {
                 match rfd::FileDialog::new().add_filter("Bookmarks (HTML)", &["html", "htm"]).pick_file() {
@@ -2834,6 +2967,20 @@ impl App {
                     self.chrome_emit(json!({"type":"sugg_remote","n":n,"items":items}));
                 }
             }
+            Ev::DevTools => {
+                if let Some(v) = self.active_view() {
+                    v.open_devtools();
+                }
+            }
+            Ev::HistImported(res) => match res {
+                Ok(items) => {
+                    let total = items.len();
+                    let n = self.lib.merge_history(items);
+                    self.toast(&format!("Imported history: {total} pages ({n} new)"));
+                    self.chrome_emit(json!({"type":"imported","n":n}));
+                }
+                Err(e) => self.toast(&e),
+            },
             Ev::Imported(res) => match res {
                 Ok(items) => {
                     let n = self.lib.import(items);
@@ -3146,6 +3293,8 @@ fn main() {
     let size = window.inner_size().to_logical::<f64>(window.scale_factor());
     let d2 = dir.clone();
     let chrome = base_builder(&window)
+        // Developer tools are for pages (F12 opens the active page's); not Wisp's own interface.
+        .with_devtools(cfg!(debug_assertions))
         .with_web_context(ctx)
         .with_bounds(to_rect(R {
             x: 0.0,
@@ -3161,6 +3310,7 @@ fn main() {
         })
         .build()
         .expect("chrome webview");
+    route_f12(&chrome, proxy.clone());
 
     let blocker = blocker::Shared::new(
         blocker::Engine::from_lists(&[include_str!("../assets/filters.txt")]),
@@ -3223,6 +3373,7 @@ fn main() {
         release_due: false,
         last_release: Instant::now(),
         restore: saved_win,
+        closed: vec![],
         pre_fs: None,
         holes: vec![],
         elem_fs: None,

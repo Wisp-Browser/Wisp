@@ -27,34 +27,50 @@ const refreshInset=syncHoles,inset=()=>{};
 const cur=()=>S&&S.tabs.find(t=>t.id===S.active);
 
 // ---------- commands + shortcuts ----------
+// Shortcuts follow Chrome's. A command can have several keys, separated by "|"; the first is the
+// one shown in menus.
 const CMDS=[
- ['newtab','New tab','ctrl+t',()=>act('new')],['closetab','Close tab','ctrl+w',()=>act('close',{id:S.active})],
- ['reload','Reload page','ctrl+r',()=>act('reload')],['address','Focus address bar','ctrl+l',()=>{$('#url').focus()}],
- ['palette','Command palette','ctrl+k',()=>palette(true)],['ai','Toggle Wisp AI','ctrl+j',()=>window.AI&&AI.toggle()],
- ['find','Find in page','ctrl+f',()=>openFind()],['findnext','Find next','f3',()=>findStep('next')],['findprev','Find previous','shift+f3',()=>findStep('prev')],
- ['zoomin','Zoom in','ctrl+=',()=>act('zoom',{d:1})],['zoomout','Zoom out','ctrl+-',()=>act('zoom',{d:-1})],['zoomreset','Reset zoom','ctrl+0',()=>act('zoom',{d:0})],
- ['reader','Reader mode','ctrl+shift+r',()=>act('reader')],['bookmark','Bookmark this page','ctrl+d',()=>act('bm_toggle')],
- ['history','History','ctrl+h',()=>openLib('history')],['bmbar','Show or hide the bookmarks bar','',()=>act('set',{k:'bmbar',v:!S.bmbar})],['bookmarks','Bookmarks','ctrl+shift+o',()=>openLib('bookmarks')],
- ['downloads','Downloads','ctrl+shift+j',()=>openLib('downloads')],['settings','Settings','ctrl+,',()=>openSettings()],
+ ['newtab','New tab','ctrl+t',()=>act('new')],['closetab','Close tab','ctrl+w|ctrl+f4',()=>act('close',{id:S.active})],
+ ['reopen','Reopen closed tab','ctrl+shift+t',()=>act('reopen')],
+ ['reload','Reload page','ctrl+r|f5',()=>act('reload')],['hardreload','Reload, ignoring the cache','ctrl+shift+r|shift+f5|ctrl+f5',()=>act('hard_reload')],
+ ['back','Back','alt+left',()=>act('back')],['fwd','Forward','alt+right',()=>act('fwd')],['home','Open the New Tab page here','alt+home',()=>act('home')],
+ ['address','Focus address bar','ctrl+l|alt+d|f6|ctrl+e',()=>{$('#url').focus();$('#url').select()}],
+ ['palette','Command palette and tab search','ctrl+k|ctrl+shift+a',()=>palette(true)],['ai','Toggle Wisp AI','ctrl+shift+space',()=>window.AI&&AI.toggle()],
+ ['find','Find in page','ctrl+f',()=>openFind()],['findnext','Find next','f3|ctrl+g',()=>findStep('next')],['findprev','Find previous','shift+f3|ctrl+shift+g',()=>findStep('prev')],
+ ['zoomin','Zoom in','ctrl+=|ctrl+shift+=',()=>act('zoom',{d:1})],['zoomout','Zoom out','ctrl+-',()=>act('zoom',{d:-1})],['zoomreset','Reset zoom','ctrl+0',()=>act('zoom',{d:0})],
+ ['reader','Reader mode','f9',()=>act('reader')],['bookmark','Bookmark this page','ctrl+d',()=>act('bm_toggle')],['bmall','Bookmark all tabs','ctrl+shift+d',()=>act('bm_all')],
+ ['history','History','ctrl+h',()=>openLib('history')],['bmbar','Show or hide the bookmarks bar','ctrl+shift+b',()=>act('set',{k:'bmbar',v:!S.bmbar})],['bookmarks','Bookmarks','ctrl+shift+o',()=>openLib('bookmarks')],
+ ['downloads','Downloads','ctrl+j',()=>openLib('downloads')],['settings','Settings','ctrl+,',()=>openSettings()],
+ ['clear','Clear browsing data','ctrl+shift+delete',()=>openSettings('privacy')],
+ ['menu','Open the menu','alt+f|alt+e',()=>popover('more')],
  ['private','New private window','ctrl+shift+n',()=>act('private')],['fullscreen','Toggle fullscreen','f11',()=>act('fullscreen')],
- ['print','Print page','ctrl+p',()=>act('print')],['siteblock','Toggle ad blocker on this site','ctrl+shift+b',()=>act('site_blocker')],
+ ['print','Print page','ctrl+p',()=>act('print')],['source','View page source','ctrl+u',()=>act('view_source')],
+ ['devtools','Developer tools','f12|ctrl+shift+i',()=>act('devtools')],
+ ['siteblock','Toggle ad blocker on this site','',()=>act('site_blocker')],
  ['pin','Pin / unpin tab','ctrl+shift+p',()=>S&&act('pin',{id:S.active})],
- ['nexttab','Next tab','ctrl+tab',()=>stepTab(1)],['prevtab','Previous tab','ctrl+shift+tab',()=>stepTab(-1)],
+ ['nexttab','Next tab','ctrl+tab|ctrl+pagedown',()=>stepTab(1)],['prevtab','Previous tab','ctrl+shift+tab|ctrl+pageup',()=>stepTab(-1)],
+ ['closewin','Close window','ctrl+shift+w',()=>act('win',{op:'close'})],
  ['unsplit','Close split view','',()=>act('unsplit')],['theme','Switch light / dark','',()=>act('theme')],
  ['hibernate','Hibernate background tabs','',()=>{S.tabs.filter(t=>t.id!==S.active&&!(S.split&&S.split.includes(t.id))).forEach(t=>act('hibernate',{id:t.id}));toast('Background tabs hibernated')}],
- ['importbm','Import bookmarks…','',()=>openSettings('bookmarks')],
+ ['importbm','Import bookmarks and history…','',()=>openSettings('bookmarks')],
 ].map(([id,name,combo,run])=>({id,name,combo,run}));
 for(let n=1;n<=9;n++)CMDS.push({id:'space'+n,name:'Go to space '+n,combo:'alt+'+n,run:()=>{const s=S.spaces[n-1];if(s)act('space_switch',{id:s.id})},hide:true});
+// Like Chrome: Ctrl+1…8 go to that tab, Ctrl+9 to the last one.
+for(let n=1;n<=9;n++)CMDS.push({id:'tab'+n,name:n<9?'Go to tab '+n:'Go to the last tab',combo:'ctrl+'+n,run:()=>{const t=n<9?S.tabs[n-1]:S.tabs[S.tabs.length-1];if(t)act('select',{id:t.id})},hide:true});
 const stepTab=d=>{if(!S||!S.tabs.length)return;const i=S.tabs.findIndex(t=>t.id===S.active),n=S.tabs[(i+d+S.tabs.length)%S.tabs.length];act('select',{id:n.id})};
 const eff=c=>{const m=S&&S.s&&S.s.shortcuts;return m&&m[c.id]!==undefined?m[c.id]:c.combo};
 const CODES={Equal:'=',Minus:'-',Comma:',',Period:'.',Slash:'/',Backslash:'\\',Backquote:'`',Space:'space',Escape:'escape',Tab:'tab',Enter:'enter',ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
 const combo=e=>{const m=[];if(e.ctrlKey||e.metaKey)m.push('ctrl');if(e.altKey)m.push('alt');if(e.shiftKey)m.push('shift');
  const k=CODES[e.code]||(/^Key[A-Z]$/.test(e.code)?e.code[3].toLowerCase():/^Digit\d$/.test(e.code)?e.code[5]:/^F\d+$/.test(e.code)?e.code.toLowerCase():String(e.key).toLowerCase());
  if(/^(control|shift|alt|meta)$/.test(k))return '';m.push(k);return m.join('+')};
-const pretty=c=>c?c.split('+').map(p=>({ctrl:'Ctrl',alt:'Alt',shift:'Shift',space:'Space',tab:'Tab',escape:'Esc'}[p]||(p.length===1?p.toUpperCase():p.toUpperCase()))).join(' + '):'Not set';
+const keysOf=c=>(eff(c)||'').split('|').filter(Boolean);
+const pretty1=c=>c?c.split('+').map(p=>({ctrl:'Ctrl',alt:'Alt',shift:'Shift',space:'Space',tab:'Tab',escape:'Esc'}[p]||({pagedown:'Page Down',pageup:'Page Up',delete:'Delete',home:'Home',left:'←',right:'→'}[p]||p.toUpperCase()))).join(' + '):'Not set';
+// All keys of a shortcut ("Ctrl + R or F5"), or just the first for menus.
+const pretty=c=>c?c.split('|').filter(Boolean).map(pretty1).join(' or '):'Not set';
+const prettyFirst=c=>pretty1((c||'').split('|')[0]);
 let combosKey='';
-function pushCombos(){const l=CMDS.map(eff).filter(Boolean),k=l.join(',');if(k!==combosKey){combosKey=k;act('combos',{list:l})}}
-function runCombo(c){const cmd=CMDS.find(x=>eff(x)===c);if(cmd){cmd.run();return true}return false}
+function pushCombos(){const l=CMDS.flatMap(keysOf),k=l.join(',');if(k!==combosKey){combosKey=k;act('combos',{list:l})}}
+function runCombo(c){const cmd=CMDS.find(x=>keysOf(x).includes(c));if(cmd){cmd.run();return true}return false}
 let capturing=null;
 addEventListener('keydown',e=>{
  if(capturing){e.preventDefault();e.stopPropagation();const c=combo(e);if(e.key==='Escape'){capturing=null;renderSettings();return}
@@ -62,7 +78,7 @@ addEventListener('keydown',e=>{
  if(!(e.ctrlKey||e.metaKey||e.altKey||/^F\d+$/.test(e.code)))return;
  const c=combo(e);if(c&&runCombo(c)){e.preventDefault();e.stopPropagation()}},true);
 function setShortcut(id,c){const m=Object.assign({},(S.s&&S.s.shortcuts)||{});
- if(c){CMDS.forEach(o=>{if(o.id!==id&&eff(o)===c){m[o.id]='';toast('Moved '+c+' from “'+o.name+'”')}})}
+ if(c){CMDS.forEach(o=>{const k=keysOf(o);if(o.id!==id&&k.includes(c)){m[o.id]=k.filter(x=>x!==c).join('|');toast('Moved '+pretty1(c)+' from “'+o.name+'”')}})}
  m[id]=c;S.s.shortcuts=m;act('set',{k:'shortcuts',v:m});pushCombos();renderSettings()}
 
 // ---------- toasts ----------
@@ -129,7 +145,7 @@ function popover(kind){if(popKind===kind){closePop();return}popKind=kind;const p
   <button class="pbtn wide" id="psl">Blocker settings</button>`;
   anchor(p,'#shbtn');
   setTimeout(()=>{$('#pst').onclick=()=>{closePop();act('site_blocker')};$('#psl').onclick=()=>{closePop();openSettings('privacy')}})}
- else{p.innerHTML='<div class="menu">'+MORE.map(x=>{if(!x)return '<div class="msep"></div>';const c=CMDS.find(y=>y.id===x[0]);return `<button data-c="${x[0]}">${ico(x[1])}<span>${x[2]}</span><small>${esc(c&&eff(c)?pretty(eff(c)):'')}</small></button>`}).join('')+'</div>';
+ else{p.innerHTML='<div class="menu">'+MORE.map(x=>{if(!x)return '<div class="msep"></div>';const c=CMDS.find(y=>y.id===x[0]);return `<button data-c="${x[0]}">${ico(x[1])}<span>${x[2]}</span><small>${esc(c&&eff(c)?prettyFirst(eff(c)):'')}</small></button>`}).join('')+'</div>';
   anchor(p,'#morebtn');
   setTimeout(()=>p.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{closePop();CMDS.find(x=>x.id===b.dataset.c).run()}))}
  p.classList.add('open');refreshInset()}
@@ -142,7 +158,7 @@ function palette(open){const m=$('#palm');if(open===false){m.classList.remove('o
 function score(h,q){h=h.toLowerCase();if(!q)return 1;if(h.startsWith(q))return 3;if(h.includes(q))return 2;let i=0;for(const c of h){if(c===q[i])i++;if(i===q.length)return 1}return 0}
 function renderPal(){const q=$('#pq').value.trim().toLowerCase(),rows=[];
  S.tabs.forEach(t=>{const s=Math.max(score(t.title||'',q),score(t.url,q)*.9);if(s)rows.push({s:s+.5,k:'tab',name:t.title||'New Tab',sub:t.url==='wisp://newtab'?'':t.url,run:()=>act('select',{id:t.id})})});
- CMDS.filter(c=>!c.hide||q).forEach(c=>{const s=score(c.name,q);if(s)rows.push({s,k:'cmd',name:c.name,sub:pretty(eff(c)),run:()=>c.run()})});
+ CMDS.filter(c=>!c.hide||q).forEach(c=>{const s=score(c.name,q);if(s)rows.push({s,k:'cmd',name:c.name,sub:eff(c)?prettyFirst(eff(c)):'',run:()=>c.run()})});
  if(q&&!rows.some(r=>r.s>=2))rows.push({s:.1,k:'go',name:/\./.test(q)&&!/\s/.test(q)?'Go to '+q:'Search for “'+q+'”',sub:'',run:()=>act('go',{input:$('#pq').value.trim()})});
  pal.rows=rows.sort((a,b)=>b.s-a.s).slice(0,40);pal.sel=Math.min(pal.sel,Math.max(0,pal.rows.length-1));
  $('#pr').innerHTML=pal.rows.map((r,i)=>`<div class="prow ${i===pal.sel?'sel':''}" data-i="${i}"><i>${r.k==='tab'?I.tab:r.k==='go'?I.search:I.cmd}</i><span>${esc(r.name)}</span><small>${esc(r.sub)}</small></div>`).join('')||'<div class="prow"><span style="opacity:.6">No matches</span></div>';
@@ -228,7 +244,7 @@ function renderSetup(){if(!su.open)return;const b=$('#setupbox');let h='';
  if(anim)$('#sunext').focus()}
 const tg=(on,k)=>`<button class="sw2 ${on?'on':''}" data-set="${k}" role="switch"><i></i></button>`;
 const row=(t,sub,ctl)=>`<div class="srow"><span>${t}${sub?`<small>${sub}</small>`:''}</span>${ctl||''}</div>`;
-function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;const s=S.s,secs=[['general','General','globe'],['appearance','Appearance','palette'],['privacy','Privacy & security','shield'],['tabs','Tabs','tab'],['shortcuts','Shortcuts','cmd'],['bookmarks','Bookmarks','bookmark'],['updates','Updates','download'],['about','About','info']];
+function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;const s=S.s,secs=[['general','General','globe'],['appearance','Appearance','palette'],['privacy','Privacy & security','shield'],['tabs','Tabs','tab'],['shortcuts','Shortcuts','cmd'],['bookmarks','Bookmarks & import','bookmark'],['updates','Updates','download'],['about','About','info']];
  const nav='<h3>Settings</h3>'+secs.map(([k,n,ic])=>`<button data-sec="${k}" class="${setSec===k?'on':''}">${ico(ic)}${n}</button>`).join('')+'<button class="pbtn" id="setx">Close</button>';
  let h='';
  if(setSec==='general')h=`<h2>General</h2>${row('Default search engine','Used by the address bar. Type a prefix like “d cats” to use another engine once.',`<div class="seg">${S.engines.map(e=>`<button data-eng="${e.id}" class="${S.engine===e.id?'on':''}">${esc(e.name)}</button>`).join('')}</div>`)}
@@ -250,9 +266,10 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
   <div class="sub"><b>Clear browsing data</b><div class="clr"><label><input type="checkbox" id="c_h" checked> Browsing history</label><label><input type="checkbox" id="c_c"> Cookies & site data</label><button class="pbtn" data-act="clear">Clear</button></div></div>`;
  if(setSec==='tabs')h=`<h2>Tabs</h2>${row('Memory saver','Unloads tabs you aren’t looking at so Wisp stays light. They reload when you click them, at the same scroll position. Tabs playing audio or video, or with text typed into a form, are kept.',`<div class="seg">${[[30,'Maximum'],[300,'Balanced'],[1800,'Moderate'],[0,'Off']].map(([v,n])=>`<button data-hib="${v}" class="${s.hibernate_s===v?'on':''}" title="${v?'After '+(v<60?v+' seconds':v/60+' minutes')+' in the background':'Never unload tabs'}">${n}</button>`).join('')}</div>`)}
   ${row('Hibernate background tabs now','',`<button class="pbtn" data-c="hibernate">Hibernate now</button>`)}`;
- if(setSec==='shortcuts')h=`<h2>Keyboard shortcuts</h2><p class="hint">Click a shortcut, then press the new keys. Backspace clears it, Esc cancels.</p>`+CMDS.filter(c=>!c.hide).map(c=>`<div class="srow"><span>${esc(c.name)}</span><button class="key ${capturing===c.id?'cap':''}" data-key="${c.id}">${capturing===c.id?'Press keys…':esc(pretty(eff(c)))}</button></div>`).join('')+`<div class="srow"><span>Go to space 1–9</span><span class="key static">Alt + 1…9</span></div><button class="pbtn" data-act="resetkeys" style="margin-top:12px">Reset all shortcuts</button>`;
- if(setSec==='bookmarks')h=`<h2>Bookmarks</h2><p class="hint">Import your bookmarks from another browser. Nothing is deleted from it.</p>${srcs.map(x=>`<div class="srow"><span>${esc(x.label)}</span><button class="pbtn" data-imp="${x.id}">Import</button></div>`).join('')||'<div class="none sm">No other browsers found automatically.</div>'}
-  ${row('From an HTML file','Works with exports from Firefox, Chrome, Edge and others.','<button class="pbtn" data-imp="html">Choose file…</button>')}
+ if(setSec==='shortcuts')h=`<h2>Keyboard shortcuts</h2><p class="hint">Click a shortcut, then press the new keys. Backspace clears it, Esc cancels.</p>`+CMDS.filter(c=>!c.hide).map(c=>`<div class="srow"><span>${esc(c.name)}</span><button class="key ${capturing===c.id?'cap':''}" data-key="${c.id}">${capturing===c.id?'Press keys…':esc(pretty(eff(c)))}</button></div>`).join('')+`<div class="srow"><span>Go to tab 1–8, or the last tab</span><span class="key static">Ctrl + 1…9</span></div><div class="srow"><span>Go to space 1–9</span><span class="key static">Alt + 1…9</span></div><button class="pbtn" data-act="resetkeys" style="margin-top:12px">Reset all shortcuts</button>`;
+ if(setSec==='bookmarks')h=`<h2>Bookmarks &amp; import</h2><p class="hint">Bring your bookmarks and history over from another browser. Nothing is changed in that browser.</p>${srcs.map(x=>`<div class="srow"><span>${esc(x.label)}</span><span style="display:flex;gap:6px"><button class="pbtn" data-imp="${x.id}">Bookmarks</button><button class="pbtn" data-imp="hist:${x.id}">History</button></span></div>`).join('')||'<div class="none sm">No other browsers found automatically.</div>'}
+  ${row('From an HTML file','Bookmarks exported from Chrome, Firefox, Edge and others, or from Google Takeout (Chrome → Bookmarks.html).','<button class="pbtn" data-imp="html">Choose file…</button>')}
+  ${row('From Google Takeout','Your Chrome history from your Google account: at takeout.google.com export “Chrome”, unzip it and pick Chrome/History.json.','<button class="pbtn" data-imp="takeout">Choose file…</button>')}
   ${row('Your bookmarks','',`<button class="pbtn" data-act="openbm">Open</button>`)}`;
  if(setSec==='updates')h=`<h2>Updates</h2>${row('Current version','Wisp '+esc(S.version),'')}
   ${S.update&&S.update.ready?row('Version '+esc(S.update.ready)+' is ready','Restart Wisp to finish installing it. Your tabs come back.','<button class="pbtn go" data-act="restart">Restart now</button>'):row('Check for updates','Looks for a newer release on GitHub.',`<button class="pbtn" data-act="upd">Check now</button>`)}${updMsg?`<div class="sub">${esc(updMsg)}</div>`:''}

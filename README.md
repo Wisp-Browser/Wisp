@@ -35,7 +35,7 @@
 - **Omnibox and command palette**: search prefixes (`d cats`, `g rust`, `k …`), suggestions, `Ctrl+K` for everything.
 - **New tab page**: wallpapers (gallery, upload image/video/GIF, gradients), animated starfield or particles,
   draggable widgets (clock, search, speed dial, weather, notes, recent tabs), accent colour, glass intensity.
-- **AI sidebar** (`Ctrl+J`): Gemini, Groq and OpenRouter with your own free key (stored in the Windows
+- **AI sidebar** (`Ctrl+Shift+Space`): Gemini, Groq and OpenRouter with your own free key (stored in the Windows
   Credential Manager), local **Ollama**, or the Claude / ChatGPT / Gemini web apps. Summarize or ask about the
   page, translate, chat with all open tabs, or right-click selected text.
 - **Privacy**: ad and tracker blocker (Rust filter-list engine, per-site switch), HTTPS-only mode,
@@ -73,9 +73,25 @@ your phone from Windows.
 
 ## Keyboard shortcuts
 
-Everything is rebindable in *Settings → Shortcuts*. Defaults: `Ctrl+T` new tab, `Ctrl+W` close, `Ctrl+L` address bar,
-`Ctrl+K` palette, `Ctrl+J` AI, `Ctrl+F` find, `Ctrl+D` bookmark, `Ctrl+H` history, `Ctrl+Shift+J` downloads,
-`Ctrl+,` settings, `Ctrl+Shift+N` private window, `F11` full screen, `Alt+1…9` spaces.
+Wisp uses Chrome's shortcuts, and everything is rebindable in *Settings → Shortcuts*. Highlights:
+
+| Keys | Action |
+|---|---|
+| `Ctrl+T` / `Ctrl+W` / `Ctrl+Shift+T` | New tab / close tab / reopen closed tab |
+| `Ctrl+Tab`, `Ctrl+PgDn` / `Ctrl+Shift+Tab`, `Ctrl+PgUp` | Next / previous tab |
+| `Ctrl+1…8` / `Ctrl+9` | Go to that tab / the last tab |
+| `Ctrl+L`, `Alt+D`, `F6` | Address bar (`Ctrl+Enter` adds www. and .com) |
+| `Alt+←` / `Alt+→` / `Alt+Home` | Back / forward / New Tab page |
+| `Ctrl+R`, `F5` / `Ctrl+Shift+R`, `Shift+F5` | Reload / reload ignoring the cache |
+| `Ctrl+D` / `Ctrl+Shift+D` / `Ctrl+Shift+B` | Bookmark page / bookmark all tabs / bookmarks bar |
+| `Ctrl+H` / `Ctrl+J` / `Ctrl+Shift+O` | History / downloads / bookmarks |
+| `Ctrl+F`, `F3`, `Ctrl+G` | Find in page, next match |
+| `Ctrl+P` / `Ctrl+U` / `F12` | Print / view source / developer tools |
+| `Ctrl+Shift+N` / `Ctrl+Shift+Delete` / `Alt+F` | Private window / clear browsing data / menu |
+| `Ctrl+K` | Command palette and tab search (Wisp) |
+| `Ctrl+Shift+Space` | Wisp AI |
+| `F9` | Reader mode |
+| `Alt+1…9` | Spaces |
 
 ## Build from source
 
