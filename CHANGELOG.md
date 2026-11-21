@@ -6,6 +6,20 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-11-20
+
+### Added
+- The Settings window can be dragged by its title, a section heading or empty space in its
+  sidebar. Double-click one of those to put it back in the middle.
+
+### Fixed
+- New tabs no longer flash Wisp's default wallpaper, font and colour before switching to yours.
+  The ready-made New Tab page now gets your look before it first draws, and stays up to date.
+- AI panel: the API key box no longer overlaps the "Get a free key" link (same for the Ollama
+  address box).
+- iPhone: the glass bar buttons no longer start out under the status bar (or over the home
+  indicator) when the app opens.
+
 ## [0.2.6] - 2026-11-20
 
 ### Added

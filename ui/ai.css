@@ -46,7 +46,8 @@ body.light .cb{background:rgba(0,0,0,.04)}
 .card b{font-size:13.5px}.card small{color:var(--fg2)}
 .card input,.ollama input{height:34px;border-radius:10px;border:1px solid var(--line-2);background:var(--raised);color:var(--fg);padding:0 11px;outline:0;font-size:13px;user-select:text;width:100%}
 .card input:focus,.ollama input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-.row{display:flex;gap:8px;align-items:center}
+/* not .row: the chrome uses that name for its fixed toolbar rows */
+.arow{display:flex;gap:8px;align-items:center}.arow input{flex:1;min-width:0}
 .pb{height:32px;padding:0 14px;border-radius:var(--pill);border:1px solid var(--line-2);background:var(--raised);font-size:12.5px;transition:background-color var(--dur) var(--ease),transform var(--dur-s) var(--ease);white-space:nowrap}
 .pb:hover{background:var(--raised-2)}.pb:active{transform:scale(.95)}.pb.go{background:var(--accent);border-color:transparent;color:var(--accent-fg)}
 .lk{color:var(--fg);text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:2px;cursor:default;font-size:12px}

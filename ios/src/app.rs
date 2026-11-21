@@ -89,6 +89,8 @@ struct Browser {
     hot_bar: Vec<CGRect>,
     /// What the native menu was last built from.
     menu_sig: String,
+    /// Screen size and safe areas last laid out for.
+    geo: String,
     /// The open sheet wants the full-screen blur behind it (the menu uses a glass panel instead).
     blur: bool,
 }
@@ -133,6 +135,15 @@ impl Browser {
 
     fn layout(&mut self) {
         let b = self.root.bounds();
+        // The screen size or safe areas (status bar, home indicator) changed, e.g. right after launch
+        // or on rotation: the interface moves, so have it re-measure where the glass goes. Its CSS
+        // picks up the new safe areas a moment later, hence the second, delayed measure.
+        let i = self.root.safeAreaInsets();
+        let geo = format!("{:?}{:?}{} {} {} {}", b.size.width, b.size.height, i.top, i.bottom, i.left, i.right);
+        if geo != self.geo {
+            self.geo = geo;
+            self.chrome_js("window.shapes&&(shapes(),setTimeout(shapes,120),setTimeout(shapes,500))");
+        }
         self.pass.setFrame(b);
         self.chrome.setFrame(b);
         self.set_hot();
@@ -982,6 +993,7 @@ fn start(mtm: MainThreadMarker) {
         glass,
         hot_bar: vec![],
         menu_sig: String::new(),
+        geo: String::new(),
         blur: false,
     };
     B.with(|cell| *cell.borrow_mut() = Some(b));

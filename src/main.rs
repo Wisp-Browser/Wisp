@@ -925,6 +925,12 @@ impl App {
         );
         let (https, tbn) = (self.https.clone(), tb.clone());
         let backdrop = if self.light() { (255, 255, 255, 255) } else { (23, 23, 31, 255) };
+        // A New Tab page gets its space's wallpaper, widgets and theme before it first draws.
+        let nt_init = if url.starts_with(NEWTAB_ID) {
+            format!("window.__WISP_NT={};", self.nt_payload(si))
+        } else {
+            String::new()
+        };
         let dir = store::data_dir();
         let d2 = dir.clone();
         let ctx = self
@@ -938,6 +944,7 @@ impl App {
             // Theme-coloured backdrop so a page that has not painted yet never flashes white or black.
             .with_background_color(backdrop)
             .with_initialization_script(&init)
+            .with_initialization_script(&nt_init)
             .with_custom_protocol("wisp".into(), move |req| serve(req, &d2))
             .with_ipc_handler(move |req| {
                 let uri = req.uri().to_string();
@@ -1374,6 +1381,14 @@ impl App {
     }
 
     fn push_nt_except(&self, skip: Option<usize>) {
+        // The ready-made New Tab page too, so it is already up to date when a tab adopts it.
+        if let Some((sid, b)) = &self.spare {
+            if let Some(si) = self.spaces.iter().position(|s| s.id == *sid) {
+                let _ = b
+                    .view
+                    .evaluate_script(&format!("window.wispUpdate&&window.wispUpdate({})", self.nt_payload(si)));
+            }
+        }
         for (si, s) in self.spaces.iter().enumerate() {
             let payload = self.nt_payload(si);
             for t in &s.tabs {

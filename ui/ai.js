@@ -97,13 +97,13 @@ function renderHead(){
   dd(mh,list,model(),id=>{A.cfg.models[p.id]=id;saveCfg();renderHead()},ms&&ms.loading?'Loading models…':(p.id==='ollama'?'No models found':'Model'))}}
 function setupCard(){const p=prov(),c=document.createElement('div');c.className='empty';
  c.innerHTML=`<img src="/logo.svg" alt=""><h3>Connect ${esc(p.name.replace(/ \(.*/,''))}</h3><p>Free tier works. Paste an API key — it's stored in the Windows Credential Manager and is never shown again.</p>
-  <div class="card"><div class="row"><input id="kin" type="password" placeholder="Paste API key" autocomplete="off" spellcheck="false"><button class="pb go" id="ksave">Save</button></div>
+  <div class="card"><div class="arow"><input id="kin" type="password" placeholder="Paste API key" autocomplete="off" spellcheck="false"><button class="pb go" id="ksave">Save</button></div>
   <small id="kerr" style="color:#ff8f8f">${esc(A.keyerr)}</small><span class="lk" id="klink">Get a free key ↗</span></div>`;
  setTimeout(()=>{const i=c.querySelector('#kin'),s=()=>{const v=i.value.trim();if(v){A.keyerr='';post({t:'ai_key_set',provider:p.id,key:v});i.value=''}};
   c.querySelector('#ksave').onclick=s;i.onkeydown=e=>{if(e.key==='Enter')s()};c.querySelector('#klink').onclick=()=>post({t:'open',url:p.link})});return c}
 function emptyCard(){const p=prov(),c=document.createElement('div');c.className='empty';
  let extra='';
- if(p.id==='ollama'){const ms=A.models.ollama;extra=`<div class="ollama"><label>Ollama address</label><div class="row"><input id="oin" value="${esc(A.cfg.ollama)}" spellcheck="false"><button class="pb" id="oretry">Connect</button></div>
+ if(p.id==='ollama'){const ms=A.models.ollama;extra=`<div class="ollama"><label>Ollama address</label><div class="arow"><input id="oin" value="${esc(A.cfg.ollama)}" spellcheck="false"><button class="pb" id="oretry">Connect</button></div>
    ${ms&&ms.error?`<p style="margin-top:8px;color:#ff8f8f">${esc(ms.error)}</p><p style="margin-top:6px">Install Ollama from <span class="lk" id="olink">ollama.com</span>, then run <code>ollama pull llama3.2</code>.</p>`:''}</div>`}
  else if(p.key)extra=`<p style="margin-top:12px"><span class="lk" id="krm">Remove saved key</span></p>`;
  else if(p.free)extra=`<p style="margin-top:12px">Free built-in model — no sign-in or key. Messages (and page text, when you ask about a page) are sent to Pollinations.ai to answer.</p>`;

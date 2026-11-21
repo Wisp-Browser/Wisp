@@ -91,6 +91,7 @@ body.private #tint{background:color-mix(in srgb,#7c4dff 14%,var(--frame))}
 .setbox{display:flex;height:min(78vh,660px)}
 #setnav{width:210px;flex:none;padding:18px 10px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
 #setnav h3{margin:0 10px 14px;font-size:17px}
+#setnav h3,#setbody h2{cursor:grab;user-select:none}.setbox.dragging,.setbox.dragging *{cursor:grabbing!important;user-select:none}
 #setnav button:not(.pbtn){height:36px;display:flex;align-items:center;gap:10px;text-align:left;padding:0 10px;border:0;border-radius:10px;background:none;color:var(--fg2);position:relative;transition:background-color var(--dur-s) var(--ease),color var(--dur-s) var(--ease)}
 #setnav button:not(.pbtn):hover{background:var(--hover);color:var(--fg)}
 #setnav button.on{background:var(--hover);color:var(--fg)}

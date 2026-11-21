@@ -82,6 +82,7 @@ function build(){
  // library + settings
  $('#libx').onclick=closeLib;$('#libm').onmousedown=e=>{if(e.target.id==='libm')closeLib()};$('#libq').oninput=()=>{lib.q=$('#libq').value;reqLib()};
  $('#setm').onmousedown=e=>{if(e.target.id==='setm')closeSettings()};
+ wireSetDrag();
  addEventListener('keydown',e=>{if(e.key!=='Escape'||capturing)return;if(popKind)closePop();else if($('#libm').classList.contains('open'))closeLib();else if($('#setm').classList.contains('open'))closeSettings()});
  addEventListener('click',e=>{if(!e.target.closest('#pop,#shbtn,#morebtn'))closePop();if(!e.target.closest('#sugg,#url'))closeSugg()});
  // suggestions on the address bar
@@ -171,6 +172,23 @@ function renderLib(items){lib.items=items;const b=$('#libbody');
 
 // ---------- settings ----------
 let setSec='general',srcs=[],updMsg='',setHtml='',setNavHtml='',setSecShown='';
+// The Settings window can be dragged by its title, a section heading or empty space in its sidebar
+// (double-click one of those to put it back in the middle). It is moved with left/top, not a
+// transform, so the page cut-out behind it (see HOLES) follows it exactly.
+let setOff={x:0,y:0};
+function placeSet(){const b=$('#setm .box');b.style.position='relative';b.style.left=setOff.x+'px';b.style.top=setOff.y+'px';syncHoles()}
+// Keep at least the title area on screen.
+function clampSet(){const b=$('#setm .box');if(!b.offsetWidth)return;const l=b.offsetLeft-setOff.x,t=b.offsetTop-setOff.y,w=b.offsetWidth;
+ setOff.x=Math.max(120-l-w,Math.min(innerWidth-l-120,setOff.x));setOff.y=Math.max(-t+4,Math.min(innerHeight-t-56,setOff.y))}
+function wireSetDrag(){const m=$('#setm'),b=m.querySelector('.box');
+ const handle=t=>!!(t.closest('#setnav h3,#setbody h2')||t.id==='setnav'||t===b);
+ b.addEventListener('pointerdown',e=>{if(e.button!==0||!handle(e.target))return;e.preventDefault();
+  const sx=e.clientX,sy=e.clientY,ox=setOff.x,oy=setOff.y;b.setPointerCapture(e.pointerId);b.classList.add('dragging');
+  const mv=ev=>{setOff={x:ox+ev.clientX-sx,y:oy+ev.clientY-sy};clampSet();placeSet()};
+  const up=()=>{b.removeEventListener('pointermove',mv);b.removeEventListener('pointerup',up);b.removeEventListener('pointercancel',up);b.classList.remove('dragging')};
+  b.addEventListener('pointermove',mv);b.addEventListener('pointerup',up);b.addEventListener('pointercancel',up)});
+ b.addEventListener('dblclick',e=>{if(handle(e.target)){setOff={x:0,y:0};placeSet()}});
+ addEventListener('resize',()=>{if(m.classList.contains('open')){clampSet();placeSet()}})}
 function openSettings(sec){if(sec)setSec=sec;$('#setm').classList.add('open');ov('set',true);if(setSec==='bookmarks')act('sources');renderSettings()}
 function closeSettings(){capturing=null;$('#setm').classList.remove('open');ov('set',false);setHtml='';setNavHtml=''}
 // ---------- appearance: shared by Settings and the first-run setup ----------
