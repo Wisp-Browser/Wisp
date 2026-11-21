@@ -6,7 +6,7 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.2.10-beta.3] - 2026-11-21
+## [0.3.0-beta.1] - 2026-11-21
 
 ### Fixed
 - Closing the last tab (or opening one) no longer flashes a dark, empty page before the New Tab page
