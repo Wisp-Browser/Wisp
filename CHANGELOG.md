@@ -6,6 +6,8 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-21
+
 ### Added
 - Chrome extensions. Add them from the Chrome Web Store, where the store's own "Add to Chrome"
   button now reads "Add to Wisp", or from the new Extensions page (`wisp://extensions`: search the
@@ -17,6 +19,7 @@ All notable changes to Wisp are documented here. The format follows
     extensions to the toolbar.
   - Settings → Extensions: open the store, manage extensions, turn them on or off.
   - Update or remove an extension from the Extensions page. Updates that ask for more access ask you again.
+  - The Extensions page shows each popular extension's Chrome Web Store icon.
 
 ## [0.3.0-beta.1] - 2026-11-21
 
