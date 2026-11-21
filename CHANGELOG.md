@@ -6,6 +6,11 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.10-beta.2] - 2026-11-20
+
+### Fixed
+- iPhone: Settings showed every search engine as selected. Only the chosen one is ticked now.
+
 ## [0.2.10-beta.1] - 2026-11-20
 
 ### Fixed
