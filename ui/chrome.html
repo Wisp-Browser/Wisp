@@ -84,7 +84,7 @@ body.lay-vertical #omni{max-width:880px}
 /* tabs */
 #tabs{display:flex;min-width:0;position:relative}
 /* tabs use size containment (for the narrow-tab query), so the strip is sized from the tab count */
-body:not(.lay-vertical) #tabs{flex:0 1 calc(var(--n,1) * 202px + var(--np,0) * 42px + 4px);align-items:center;gap:2px;height:100%;overflow-x:auto;overflow-y:hidden;padding:0 2px;scrollbar-width:none}
+body:not(.lay-vertical) #tabs{flex:0 1 calc(var(--n,1) * 202px + var(--np,0) * 42px + 4px);transition:flex-basis var(--dur) var(--ease);align-items:center;gap:2px;height:100%;overflow-x:auto;overflow-y:hidden;padding:0 2px;scrollbar-width:none}
 body:not(.lay-vertical) #tabs::-webkit-scrollbar{display:none}
 .tab{position:relative;display:flex;align-items:center;gap:8px;height:32px;padding:0 4px 0 10px;border-radius:10px;color:var(--fg2);flex:0 1 200px;min-width:40px;container-type:inline-size;transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
 .tab:hover{background:var(--hover);color:var(--fg)}
@@ -99,8 +99,11 @@ body:not(.lay-vertical) .tab .pn{display:none}
 @keyframes tabin{from{opacity:0;transform:scale(.92)}}
 body.lay-vertical .tab.new{animation-name:tabinv}
 @keyframes tabinv{from{opacity:0;transform:translateX(-8px)}}
-.ghost{position:fixed;pointer-events:none;z-index:4;animation:tabout var(--dur) var(--ease) forwards;margin:0}
-@keyframes tabout{to{opacity:0;transform:scale(.92)}}
+/* A closed tab shrinks out of its place (the reverse of .new); tabs after it close the gap as it goes. */
+.tab.closing{pointer-events:none;overflow:hidden;animation:tabout var(--dur) var(--ease) forwards}
+@keyframes tabout{to{opacity:0;transform:scale(.92);flex-basis:0;min-width:0;width:0;padding-left:0;padding-right:0;gap:0}}
+body.lay-vertical .tab.closing{animation-name:taboutv}
+@keyframes taboutv{to{opacity:0;transform:translateX(-8px);height:0}}
 .ic{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;font-size:10px;font-weight:600;flex:none;overflow:hidden;color:var(--fg2)}
 .ic img,.ic .i{width:16px;height:16px}
 .tab.loading .ic{border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .75s linear infinite}
@@ -194,6 +197,7 @@ body.fs .row,body.fs #side{display:none}
 <div class="veil" id="palm"><div class="box big glass-m"><div class="pqw"><span class="pqi"></span><input id="pq" placeholder="Type a command, tab, or address…" autocomplete="off"></div><div id="pr"></div></div></div>
 <div class="veil" id="libm"><div class="box big glass-m xl"><div class="mh"><div class="seg" id="libtabs"></div><input id="libq" placeholder="Search"><button class="ib" id="libx" title="Close"></button></div><div id="libbody"></div></div></div>
 <div class="veil" id="setm"><div class="box big glass-m xl setbox"><nav id="setnav"></nav><div id="setbody"></div></div></div>
+<div id="pwbar" class="glass-m" role="dialog" aria-label="Save password"></div>
 <div class="veil" id="extm"><div class="box glass-m" id="extbox"></div></div>
 <div class="veil" id="setup"><div class="box glass-m" id="setupbox"></div></div>
 <script src="/icons.js"></script>
@@ -223,7 +227,7 @@ function place(lay){if(placed===lay)return;placed=lay;const parts=$('#parts'),fo
  if(focus)$('#url').focus();tabEls.forEach(d=>d.classList.remove('new'));tabSig='';syncTabs();if(window.M5)M5.relayout()}
 
 const XI=ico('x');
-const ic=t=>{try{const u=new URL(t.url);if(u.protocol.startsWith('http'))return `<img src="${u.origin}/favicon.ico" alt="${(t.title||'•')[0].toUpperCase().replace(/[^A-Z0-9a-z•]/g,'•')}" onerror="this.parentNode.textContent=this.alt">`}catch(e){}return t.url==='wisp://newtab'?'<img src="/logo.svg" alt="">':t.url==='wisp://extensions'?ico('puzzle'):(t.title||'•')[0].toUpperCase()};
+const ic=t=>{try{const u=new URL(t.url);if(u.protocol.startsWith('http'))return `<img src="${u.origin}/favicon.ico" alt="${(t.title||'•')[0].toUpperCase().replace(/[^A-Z0-9a-z•]/g,'•')}" onerror="this.parentNode.textContent=this.alt">`}catch(e){}return t.url==='wisp://newtab'?'<img src="/logo.svg" alt="">':t.url==='wisp://extensions'?ico('puzzle'):t.url==='wisp://passwords'?ico('key'):(t.title||'•')[0].toUpperCase()};
 const tabEls=new Map(),extraEls=new Map();let firstRender=true,spaceSig='',tabSig='';
 function mkTab(){const d=document.createElement('div');d.draggable=true;d.className='tab'+(firstRender?'':' new');
   d.innerHTML=`<span class="ic"></span><span class="tt"></span><span class="badge"></span><button class="tb pn"></button><button class="tb cl" title="Close (Ctrl+W)">${XI}</button>`;
@@ -253,20 +257,22 @@ function syncTabs(){const sc=$('#tabs'),pins=S.tabs.filter(t=>t.pinned),rest=S.t
   const get=t=>{let d=tabEls.get(t.id);if(!d){d=mkTab();tabEls.set(t.id,d)}updTab(d,t);return d};
   if(vert()){if(pins.length)want.push(secEl('hp','sect','Pinned'),...pins.map(get),secEl('dv','divline'));want.push(secEl('ht','sect','Tabs'),...rest.map(get))}
   else want.push(...pins.map(get),...rest.map(get));
-  sc.style.setProperty('--n',rest.length);sc.style.setProperty('--np',pins.length);
   const sig=want.map(e=>e._t?e._t.id:e.className).join(',');
   if(sig!==tabSig){
    // FLIP: remember where tabs were, change the DOM, then slide them from old to new spots (transform only).
    // Opening/closing tabs in quick succession: skip the slide and fade animations (and clear any
    // still running), so tabs never pile up on top of each other.
    const now=performance.now(),rapid=now-lastTabChange<260;lastTabChange=now;
-   if(rapid){document.querySelectorAll('.tab.ghost').forEach(g=>g.remove());tabEls.forEach(el=>{el.style.transition='';el.style.transform='';el.classList.remove('new')})}
+   if(rapid){sc.querySelectorAll('.tab.closing').forEach(g=>g.remove());tabEls.forEach(el=>{el.style.transition='';el.style.transform='';el.classList.remove('new')})}
    const anim=!firstRender&&!RM.matches&&tabSig!==''&&!rapid,before=new Map();
    if(anim)tabEls.forEach((el,id)=>{if(el.isConnected)before.set(id,el.getBoundingClientRect())});
    const ids=new Set(S.tabs.map(t=>t.id));
-   tabEls.forEach((el,id)=>{if(!ids.has(id)){if(anim&&el.isConnected&&before.has(id))ghost(el,before.get(id));tabEls.delete(id)}});
-   want.forEach((el,i)=>{if(sc.children[i]!==el)sc.insertBefore(el,sc.children[i]||null)});
-   while(sc.children.length>want.length)sc.lastChild.remove();
+   // Closed tabs stay where they are while they shrink away (see .closing), then leave.
+   tabEls.forEach((el,id)=>{if(!ids.has(id)){if(anim&&el.isConnected){el.classList.remove('new');el.classList.add('closing');const gone=()=>el.remove();el.addEventListener('animationend',gone,{once:true});setTimeout(gone,450)}tabEls.delete(id)}});
+   const live=()=>[...sc.children].filter(c=>!c.classList.contains('closing'));
+   want.forEach((el,i)=>{const k=live();if(k[i]!==el)sc.insertBefore(el,k[i]||null)});
+   live().slice(want.length).forEach(c=>c.remove());
+   sc.style.setProperty('--n',rest.length);sc.style.setProperty('--np',pins.length);
    if(anim){const moved=[];before.forEach((r,id)=>{const el=tabEls.get(id);if(!el||!el.isConnected)return;const n=el.getBoundingClientRect(),dx=r.left-n.left,dy=r.top-n.top;
      if(Math.abs(dx)>.5||Math.abs(dy)>.5){el.style.transition='none';el.style.transform=`translate(${dx}px,${dy}px)`;moved.push(el)}});
     if(moved.length){sc.offsetWidth;moved.forEach(el=>{el.style.transition='transform var(--dur) var(--ease)';el.style.transform='';
@@ -275,8 +281,6 @@ function syncTabs(){const sc=$('#tabs'),pins=S.tabs.filter(t=>t.pinned),rest=S.t
    const a=tabEls.get(S.active);if(a&&!vert()&&!firstRender)requestAnimationFrame(()=>a.scrollIntoView({block:'nearest',inline:'nearest'}));
   }
   firstRender=false}
-function ghost(el,r){const g=el.cloneNode(true);g.classList.remove('new','dragover');g.classList.add('ghost');Object.assign(g.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px',transform:''});
-  document.body.appendChild(g);g.addEventListener('animationend',()=>g.remove());setTimeout(()=>g.remove(),400)}
 function lum(h){const n=parseInt((h||'#000').slice(1),16);if(isNaN(n))return 0;const f=c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)};return .2126*f(n>>16&255)+.7152*f(n>>8&255)+.0722*f(n&255)}
 // Layout / style / theme classes. Changes crossfade through a view transition (skipped for reduced motion).
 let chromeSig='';

@@ -11,7 +11,7 @@ const act=(t,x)=>send(Object.assign({t},x||{}));
 // away there, so menus and dialogs appear on top of a page that stays put and stays visible.
 // Rects come from layout boxes (offset*), which ignore the scale/slide-in transforms of open animations.
 let holeSig='',holeRaf=0;
-const HOLES=[['#pop',0],['#sugg',0],['#ctx',0],['#spm',0],['#findbar',0],['#palm',1],['#libm',1],['#setm',1],['#spmodal',1],['#extm',1]];
+const HOLES=[['#pop',0],['#sugg',0],['#ctx',0],['#spm',0],['#findbar',0],['#palm',1],['#libm',1],['#setm',1],['#spmodal',1],['#extm',1],['#pwbar',0]];
 function lbox(el){let x=0,y=0,e=el;while(e){x+=e.offsetLeft;y+=e.offsetTop;e=e.offsetParent}return{x,y,w:el.offsetWidth,h:el.offsetHeight}}
 function syncHoles(){if(holeRaf)return;holeRaf=requestAnimationFrame(()=>{holeRaf=0;const rects=[];
  const add=el=>{const b=lbox(el),rad=parseFloat(getComputedStyle(el).borderTopLeftRadius)||14;if(b.w>0&&b.h>0)rects.push({x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.w),h:Math.round(b.h),r:Math.min(rad,b.h/2)})};
@@ -44,7 +44,7 @@ const CMDS=[
  ['zoomin','Zoom in','ctrl+=|ctrl+shift+=',()=>act('zoom',{d:1})],['zoomout','Zoom out','ctrl+-',()=>act('zoom',{d:-1})],['zoomreset','Reset zoom','ctrl+0',()=>act('zoom',{d:0})],
  ['reader','Reader mode','f9',()=>act('reader')],['bookmark','Bookmark this page','ctrl+d',()=>act('bm_toggle')],['bmall','Bookmark all tabs','ctrl+shift+d',()=>act('bm_all')],
  ['history','History','ctrl+h',()=>openLib('history')],['bmbar','Show or hide the bookmarks bar','ctrl+shift+b',()=>act('set',{k:'bmbar',v:!S.bmbar})],['bookmarks','Bookmarks','ctrl+shift+o',()=>openLib('bookmarks')],
- ['downloads','Downloads','ctrl+j',()=>openLib('downloads')],['extensions','Extensions','',()=>act('ext_manage')],['webstore','Chrome Web Store','',()=>act('ext_store',{q:''})],['settings','Settings','ctrl+,',()=>openSettings()],
+ ['downloads','Downloads','ctrl+j',()=>openLib('downloads')],['extensions','Extensions','',()=>act('ext_manage')],['passwords','Passwords','',()=>act('pw_manage')],['webstore','Chrome Web Store','',()=>act('ext_store',{q:''})],['settings','Settings','ctrl+,',()=>openSettings()],
  ['clear','Clear browsing data','ctrl+shift+delete',()=>openSettings('privacy')],
  ['menu','Open the menu','alt+f|alt+e',()=>popover('more')],
  ['private','New private window','ctrl+shift+n',()=>act('private')],['fullscreen','Toggle fullscreen','f11',()=>act('fullscreen')],
@@ -145,7 +145,7 @@ function closeSugg(){if(!sg.open)return;sg.open=false;$('#sugg').classList.remov
 // ---------- popovers (shield + more) ----------
 let popKind=null;
 function anchor(p,btn){const r=$(btn).getBoundingClientRect();p.style.top=(r.bottom+8)+'px';p.style.right=Math.max(8,innerWidth-r.right)+'px';p.style.left='auto'}
-const MORE=[['find','search','Find in page'],['zoomin','zoomin','Zoom in'],['zoomout','zoomout','Zoom out'],['reader','reader','Reader mode'],['bookmark','star','Bookmark this page'],0,['bookmarks','bookmark','Bookmarks'],['history','history','History'],['downloads','download','Downloads'],['extensions','puzzle','Extensions'],0,['private','private','New private window'],['fullscreen','full','Full screen'],['print','print','Print…'],['theme','contrast','Light / dark theme'],0,['settings','settings','Settings']];
+const MORE=[['find','search','Find in page'],['zoomin','zoomin','Zoom in'],['zoomout','zoomout','Zoom out'],['reader','reader','Reader mode'],['bookmark','star','Bookmark this page'],0,['bookmarks','bookmark','Bookmarks'],['history','history','History'],['downloads','download','Downloads'],['extensions','puzzle','Extensions'],['passwords','key','Passwords'],0,['private','private','New private window'],['fullscreen','full','Full screen'],['print','print','Print…'],['theme','contrast','Light / dark theme'],0,['settings','settings','Settings']];
 function popover(kind){if(popKind===kind){closePop();return}popoverPre(kind);popKind=kind;const p=$('#pop'),pg=(S&&S.page)||{};
  if(kind==='shield'){const f=S.filters||{};p.innerHTML=`<h4>${esc(pg.host||'This page')}</h4>
   <div class="prow2"><span>Ad &amp; tracker blocking<br><small>${S.s.blocker?(pg.site_off?'Off on this site':'On'):'Off everywhere (Settings)'}</small></span><button class="sw2 ${S.s.blocker&&!pg.site_off?'on':''}" id="pst" role="switch" ${pg.host&&S.s.blocker?'':'disabled'}><i></i></button></div>
@@ -179,6 +179,13 @@ function extConfirm(e){extAsk=e.id;const b=$('#extbox');
   +(e.warnings&&e.warnings.length?`<p>${e.update?'The new version asks for more access. It can:':'It can:'}</p><ul>${e.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:'<p>It doesn’t ask for any special access.</p>')
   +`<div class="row2"><button class="pbtn" id="xno">Cancel</button><button class="pbtn go" id="xyes">${e.update?'Update':'Add extension'}</button></div>`;
  $('#extm').classList.add('open');$('#xno').onclick=()=>extAnswer(false);$('#xyes').onclick=()=>extAnswer(true);$('#xyes').focus()}
+// ---------- "Save password?" ----------
+let pwT=0;
+function pwOffer(e){const b=$('#pwbar'),r=$('#row2').offsetHeight?$('#row2').getBoundingClientRect():$('#row1').getBoundingClientRect();b.style.top=(r.bottom+6)+'px';
+ b.innerHTML=`<div class="ph"><i class="ki">${ico('key')}</i><div style="min-width:0"><b>${e.update?'Update':'Save'} password for ${esc(e.site)}?</b><small>${esc(e.user||'No username')} · ••••••••</small></div></div>
+  <div class="row2">${e.update?'':'<button class="pbtn" data-pa="never">Never</button>'}<button class="pbtn" data-pa="dismiss">Not now</button><button class="pbtn go" data-pa="save">${e.update?'Update':'Save'}</button></div>`;
+ b.querySelectorAll('[data-pa]').forEach(x=>x.onclick=()=>pwAnswer(x.dataset.pa));b.classList.add('open');clearTimeout(pwT);pwT=setTimeout(()=>pwAnswer('dismiss'),45000)}
+function pwAnswer(a){const b=$('#pwbar');if(!b.classList.contains('open'))return;clearTimeout(pwT);b.classList.remove('open');act('pw_answer',{a})}
 function extAnswer(ok){if(!extAsk)return;act('ext_confirm',{id:extAsk,ok});extAsk=null;$('#extm').classList.remove('open')}
 
 // ---------- command palette ----------
@@ -274,7 +281,7 @@ function renderSetup(){if(!su.open)return;const b=$('#setupbox');let h='';
  if(anim)$('#sunext').focus()}
 const tg=(on,k)=>`<button class="sw2 ${on?'on':''}" data-set="${k}" role="switch"><i></i></button>`;
 const row=(t,sub,ctl)=>`<div class="srow"><span>${t}${sub?`<small>${sub}</small>`:''}</span>${ctl||''}</div>`;
-function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;const s=S.s,secs=[['general','General','globe'],['appearance','Appearance','palette'],['privacy','Privacy & security','shield'],['tabs','Tabs','tab'],['shortcuts','Shortcuts','cmd'],['bookmarks','Bookmarks & import','bookmark'],['extensions','Extensions','puzzle'],['updates','Updates','download'],['about','About','info']];
+function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;const s=S.s,secs=[['general','General','globe'],['appearance','Appearance','palette'],['privacy','Privacy & security','shield'],['tabs','Tabs','tab'],['shortcuts','Shortcuts','cmd'],['bookmarks','Bookmarks & import','bookmark'],['extensions','Extensions','puzzle'],['passwords','Passwords','key'],['updates','Updates','download'],['about','About','info']];
  const nav='<h3>Settings</h3>'+secs.map(([k,n,ic])=>`<button data-sec="${k}" class="${setSec===k?'on':''}">${ico(ic)}${n}</button>`).join('')+'<button class="pbtn" id="setx">Close</button>';
  let h='';
  if(setSec==='general')h=`<h2>General</h2>${row('Default search engine','Used by the address bar. Type a prefix like “d cats” to use another engine once.',`<div class="seg">${S.engines.map(e=>`<button data-eng="${e.id}" class="${S.engine===e.id?'on':''}">${esc(e.name)}</button>`).join('')}</div>`)}
@@ -305,6 +312,12 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
   ${row('Chrome Web Store','Browse and add extensions. Open any extension there and press “Add to Wisp”.','<button class="pbtn go" data-xs="store">Open store</button>')}
   ${row('Manage extensions','Turn extensions on or off, open their options, update or remove them.','<button class="pbtn" data-xs="manage">Open</button>')}
   ${xs.length?'<h5>Installed</h5>'+xs.map(x=>row(`<span style="display:inline-flex;align-items:center;gap:10px">${xIcon(x)}${esc(x.name)}</span>`,esc('Version '+x.version),`<span style="display:flex;gap:6px;align-items:center">${x.options?`<button class="pbtn" data-xo="${esc(x.id)}">Options</button>`:''}<button class="sw2 ${x.enabled?'on':''}" data-xt="${esc(x.id)}" role="switch"><i></i></button></span>`)).join(''):'<div class="none sm">No extensions installed yet.</div>'}`}
+ if(setSec==='passwords'){const pw=S.pw||{};h=`<h2>Passwords</h2><p class="hint">Wisp keeps saved passwords encrypted for your Windows account. Showing or exporting them asks Windows Hello first.</p>
+  ${row('Offer to save passwords','When you sign in to a site, Wisp asks whether to save the password, and fills it next time.',`<button class="sw2 ${pw.save?'on':''}" id="pwtg" role="switch"><i></i></button>`)}
+  ${row('Saved passwords',(pw.count||0)+' saved','<button class="pbtn" data-pw="manage">Manage</button>')}
+  <h5>Import</h5>${(pw.sources||[]).map(x=>row(esc(x.name),'Saved passwords from '+esc(x.name)+' on this PC.',`<button class="pbtn" data-pwi="${esc(x.id)}">Import</button>`)).join('')}
+  ${row('From a file','A passwords CSV exported from any browser or password manager (Firefox, Safari, Bitwarden, 1Password and others).','<button class="pbtn" data-pwi="csv">Choose file…</button>')}
+  ${row('Passkeys','Passkeys can’t be copied out of other browsers. Sites still let you sign in with them using Windows Hello or your phone.','<button class="pbtn" data-pw="passkeys">Windows passkeys</button>')}`}
  if(setSec==='updates')h=`<h2>Updates</h2>${row('Current version','Wisp '+esc(S.version),'')}
   ${S.update&&S.update.ready?row('Version '+esc(S.update.ready)+' is ready','Restart Wisp to finish installing it. Your tabs come back.','<button class="pbtn go" data-act="restart">Restart now</button>'):row('Check for updates','Looks for a newer release on GitHub.',`<button class="pbtn" data-act="upd">Check now</button>`)}${updMsg?`<div class="sub">${esc(updMsg)}</div>`:''}
   ${row('Update automatically','Checks every few hours, downloads in the background, and installs when you restart. It never interrupts your work.',tg(s.auto_update,'auto_update'))}
@@ -321,6 +334,9 @@ function renderSettings(){if(!S||!$('#setm').classList.contains('open'))return;c
  b.querySelectorAll('[data-ch]').forEach(x=>x.onclick=()=>act('set',{k:'channel',v:x.dataset.ch}));
  b.querySelectorAll('[data-un]').forEach(x=>x.onclick=()=>act('set',{k:'unblock_site',v:x.dataset.un}));
  b.querySelectorAll('[data-imp]').forEach(x=>x.onclick=()=>act('import',{src:x.dataset.imp}));
+ const pt=$('#pwtg');if(pt)pt.onclick=()=>act('set',{k:'pw_save',v:!(S.pw&&S.pw.save)});
+ b.querySelectorAll('[data-pw]').forEach(x=>x.onclick=()=>{if(x.dataset.pw==='manage')closeSettings();act(x.dataset.pw==='manage'?'pw_manage':'passkeys')});
+ b.querySelectorAll('[data-pwi]').forEach(x=>x.onclick=()=>act('pw_import',{src:x.dataset.pwi}));
  b.querySelectorAll('[data-xs]').forEach(x=>x.onclick=()=>{closeSettings();act(x.dataset.xs==='store'?'ext_store':'ext_manage',{q:''})});
  b.querySelectorAll('[data-xt]').forEach(x=>x.onclick=()=>{const e=(S.exts||[]).find(y=>y.id===x.dataset.xt);act('ext_toggle',{id:x.dataset.xt,on:!(e&&e.enabled)})});
  b.querySelectorAll('[data-xo]').forEach(x=>x.onclick=()=>{closeSettings();act('ext_options',{id:x.dataset.xo})});
@@ -353,6 +369,7 @@ function event(e){switch(e.type){
  case'upd':updMsg=e.msg;renderSettings();if(!$('#setm').classList.contains('open'))toast(e.msg);break;
  case'update_ready':updMsg='Version '+e.version+' is ready.';stickyToast('Update '+e.version+' ready',"Restart",()=>act('update_apply'));renderSettings();break;
  case'pageclick':closePop();if($('#extm').classList.contains('open'))extAnswer(false);closeSugg();if($('#palm').classList.contains('open'))palette(false);if($('#libm').classList.contains('open'))closeLib();if($('#setm').classList.contains('open')&&!capturing)closeSettings();if($('#spmodal')&&$('#spmodal').classList.contains('open'))$('#spmodal').classList.remove('open');$('#ctx').classList.remove('open');$('#spm').classList.remove('open');break;
+ case'pw_offer':pwOffer(e);break;
  case'ext_confirm':closePop();extConfirm(e);break;
  case'ext_popup':extPopup=e.id||null;pinSig='';renderPins();break;
  case'imported':if($('#libm').classList.contains('open'))reqLib();break}}

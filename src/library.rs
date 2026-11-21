@@ -390,7 +390,7 @@ fn from_webkit_time(us: i64) -> u64 {
     (us / 1_000_000 - 11_644_473_600).max(0) as u64
 }
 
-fn copy_db(path: &Path, what: &str) -> Result<PathBuf, String> {
+pub fn copy_db(path: &Path, what: &str) -> Result<PathBuf, String> {
     let tmp = std::env::temp_dir().join(format!("wisp-{what}-{}.sqlite", std::process::id()));
     std::fs::copy(path, &tmp).map_err(|_| format!("Couldn't read the {what} file. Close that browser and try again."))?;
     Ok(tmp)

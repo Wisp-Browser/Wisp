@@ -10,6 +10,7 @@ mod instance;
 mod layout;
 mod library;
 mod omni;
+mod passwords;
 mod store;
 mod updater;
 
@@ -59,6 +60,9 @@ const NEWTAB_ID: &str = "wisp://newtab";
 const EXT_URL: &str = "http://wisp.localhost/extensions";
 const EXT_ID: &str = "wisp://extensions";
 const EXT_PAGE: &str = include_str!("../ui/extensions.html");
+const PW_URL: &str = "http://wisp.localhost/passwords";
+const PW_ID: &str = "wisp://passwords";
+const PW_PAGE: &str = include_str!("../ui/passwords.html");
 const STORE: &str = "https://chromewebstore.google.com";
 
 // Layout geometry (logical px) — mirrored in ui/chrome.html (--ct, --cl, --sw).
@@ -133,6 +137,42 @@ document.addEventListener('pointerover',e=>{const v=e.target&&e.target.closest&&
  const bt=sr.querySelector('button'),r=v.getBoundingClientRect();bt.style.left=Math.max(8,r.right-44)+'px';bt.style.top=Math.max(8,r.top+10)+'px';
  bt.addEventListener('click',ev=>{if(!ev.isTrusted)return;(document.pictureInPictureElement===v?document.exitPictureInPicture():v.requestPictureInPicture()).catch(()=>{});});
  document.documentElement.appendChild(b);pip=b;const gone=()=>{if(pip){pip.remove();pip=null;pipV=null}};v.addEventListener('pointerleave',ev=>{setTimeout(()=>{if(pip&&!pip.matches(':hover'))gone()},900)},{once:true});setTimeout(gone,6000)},true);
+// Passwords: offer to save what you sign in with, and fill saved ones from a menu under the field.
+// Fill data only ever comes from Wisp for this page's own origin (checked by Wisp and here).
+if(window.top===window&&/^https?:$/.test(location.protocol)&&H!=='wisp.localhost'){let accts=[],asked=false,menu=null,last='';
+ const vis=i=>!!(i.offsetWidth||i.offsetHeight||i.getClientRects().length);
+ const pws=()=>[...document.querySelectorAll('input[type=password]')].filter(vis);
+ const TXT='input:not([type]),input[type=text],input[type=email],input[type=tel]';
+ const userFor=pw=>{const root=pw.form||document;let best=null;for(const i of root.querySelectorAll(TXT)){if(vis(i)&&(i.compareDocumentPosition(pw)&4))best=i}return best};
+ // Two-step sign-ins (name on one page, password on the next): remember the name for this tab.
+ addEventListener('change',e=>{const i=e.target;if(i&&i.matches&&i.matches(TXT)&&/user|mail|login|name|id/i.test((i.name||'')+(i.id||'')+(i.autocomplete||'')+(i.type||''))&&i.value){try{sessionStorage.setItem('__wispu',i.value)}catch(_){}}},true);
+ const offer=()=>{const pw=pws().find(i=>i.value);if(!pw)return;const u=userFor(pw);let name=u&&u.value||'';if(!name){try{name=sessionStorage.getItem('__wispu')||''}catch(_){}}
+  const k=name+'\n'+pw.value;if(k===last)return;last=k;p({t:'pw_offer',n:N,user:name.slice(0,300),pass:pw.value.slice(0,1000)})};
+ addEventListener('submit',offer,true);
+ addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.type==='password')offer()},true);
+ addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('button,input[type=submit],input[type=button],[role=button]');if(b&&pws().some(i=>i.value))offer()},true);
+ addEventListener('pagehide',offer,true);
+ const hideMenu=()=>{if(menu){menu.remove();menu=null}};
+ const fill=(el,v)=>{if(!el)return;const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;el.focus();set.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))};
+ const show=field=>{hideMenu();if(!accts.length)return;const r=field.getBoundingClientRect();menu=document.createElement('div');menu.style.cssText='all:initial;position:fixed;z-index:2147483647;left:0;top:0';
+  const sr=menu.attachShadow({mode:'closed'}),st=document.createElement('style');
+  st.textContent='.m{position:fixed;min-width:220px;max-width:340px;padding:6px;border-radius:14px;background:rgba(30,30,42,.96);border:1px solid rgba(255,255,255,.1);box-shadow:0 14px 40px rgba(0,0,0,.4);font:13px system-ui,Segoe UI,sans-serif;color:#f2f2f7}.h{padding:4px 10px 6px;font-size:11px;opacity:.6}button{display:flex;align-items:center;gap:10px;width:100%;height:36px;border:0;border-radius:9px;background:none;color:inherit;font:inherit;text-align:left;padding:0 10px;cursor:default}button:hover{background:rgba(255,255,255,.09)}svg{width:16px;height:16px;fill:none;stroke:#8f8cff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
+  const box=document.createElement('div');box.className='m';box.style.left=Math.max(4,Math.min(r.left,innerWidth-344))+'px';box.style.top=Math.min(r.bottom+4,innerHeight-60)+'px';
+  const h=document.createElement('div');h.className='h';h.textContent='Saved in Wisp';box.appendChild(h);
+  for(const a of accts){const b=document.createElement('button');const ic=document.createElementNS('http://www.w3.org/2000/svg','svg');ic.setAttribute('viewBox','0 0 24 24');const pa=document.createElementNS('http://www.w3.org/2000/svg','path');pa.setAttribute('d','M15.5 7.5a3.5 3.5 0 1 1-3.4 4.3L4 20M7 17l2 2M9.5 14.5l2 2');ic.appendChild(pa);
+   const s=document.createElement('span');s.textContent=a.user||'(no username)';b.append(ic,s);
+   b.addEventListener('mousedown',e=>e.preventDefault());b.addEventListener('click',e=>{if(!e.isTrusted)return;hideMenu();p({t:'pw_fill',n:N,id:a.id})});box.appendChild(b)}
+  sr.append(st,box);document.documentElement.appendChild(menu)};
+ const isLoginField=i=>i&&i.tagName==='INPUT'&&(i.type==='password'||pws().some(pw=>userFor(pw)===i));
+ addEventListener('focusin',e=>{if(accts.length&&isLoginField(e.target))show(e.target);else hideMenu()},true);
+ addEventListener('mousedown',e=>{if(menu&&!e.composedPath().includes(menu)&&!isLoginField(e.target))hideMenu()},true);
+ addEventListener('keydown',e=>{if(e.key==='Escape')hideMenu();else if(menu&&e.key!=='Tab'&&e.key!=='ArrowDown')hideMenu()},true);
+ addEventListener('scroll',hideMenu,true);
+ const look=()=>{if(!asked&&pws().length){asked=true;p({t:'pw_query',n:N})}};
+ Object.defineProperty(window,'__wispPwUsers',{value:list=>{accts=Array.isArray(list)?list:[];const a=document.activeElement;if(accts.length&&isLoginField(a))show(a)}});
+ Object.defineProperty(window,'__wispPwFill',{value:(origin,user,pass)=>{if(origin!==location.origin)return;const pw=pws()[0];const u=pw?userFor(pw):document.querySelector(TXT);if(u&&user)fill(u,user);if(pw)fill(pw,pass)}});
+ let lt=0;new MutationObserver(()=>{if(asked)return;clearTimeout(lt);lt=setTimeout(look,300)}).observe(document,{subtree:true,childList:true});
+ addEventListener('DOMContentLoaded',look);setTimeout(look,1200)}
 // Chrome Web Store: the store's own "Add to Chrome" button adds the extension to Wisp instead (Wisp
 // asks before installing). Google's pages enforce Trusted Types, so everything is built with DOM calls.
 if(H==='chromewebstore.google.com'){let have=new Set(__EXTS__),busy='',fab=null;
@@ -259,6 +299,10 @@ enum Ev {
     ExtLoadErr(String),
     /// Chrome Web Store icons finished downloading.
     StoreIcons,
+    /// Windows confirmed (or didn't) that it's the user, for a password action.
+    PwVerified(bool, PwAction),
+    /// Passwords read from another browser or a file: (from, result).
+    PwImported(String, Result<passwords::BrowserImport, String>),
     /// No size came from the extension popup: give it Chrome's default.
     PopupFallback(u64),
 }
@@ -346,6 +390,8 @@ fn real(u: &str) -> String {
         format!("{NEWTAB_URL}#spare")
     } else if u == EXT_ID {
         EXT_URL.into()
+    } else if u == PW_ID {
+        PW_URL.into()
     } else {
         u.into()
     }
@@ -355,6 +401,8 @@ fn shown(u: &str) -> String {
         NEWTAB_ID.into()
     } else if u.starts_with(EXT_URL) {
         EXT_ID.into()
+    } else if u.starts_with(PW_URL) {
+        PW_ID.into()
     } else {
         u.into()
     }
@@ -879,6 +927,7 @@ fn serve(req: Request<Vec<u8>>, dir: &Path) -> Response<Cow<'static, [u8]>> {
         "/chrome" => respond(200, "text/html; charset=utf-8", CHROME.as_bytes().to_vec()),
         "/newtab" => respond(200, "text/html; charset=utf-8", NEWTAB.as_bytes().to_vec()),
         "/extensions" => respond(200, "text/html; charset=utf-8", EXT_PAGE.as_bytes().to_vec()),
+        "/passwords" => respond(200, "text/html; charset=utf-8", PW_PAGE.as_bytes().to_vec()),
         // Chrome Web Store icons for the Extensions page: /storeicon/<id>.
         p if p.starts_with("/storeicon/") => {
             let id = &p[11..];
@@ -949,6 +998,12 @@ fn serve(req: Request<Vec<u8>>, dir: &Path) -> Response<Cow<'static, [u8]>> {
         }
         _ => respond(404, "text/plain", vec![]),
     }
+}
+
+/// Something done with passwords once Windows confirms it's the user.
+enum PwAction {
+    Reveal(usize, u64),
+    Export,
 }
 
 /// An open extension popup (the menu an extension shows from its toolbar button).
@@ -1069,6 +1124,15 @@ struct App {
     /// The open extension popup.
     ext_popup: Option<Popup>,
     ext_popup_n: u64,
+    /// Saved passwords.
+    vault: passwords::Vault,
+    /// A sign-in Wisp is offering to save: (origin, username, password).
+    pw_offer: Option<(String, String, String)>,
+    /// Windows confirmed it's the user at this time (showing passwords stays unlocked a while).
+    pw_unlocked: Option<Instant>,
+    pw_verifying: bool,
+    /// Browsers on this PC with saved passwords to import (found once at startup).
+    pw_sources: Value,
 }
 
 impl App {
@@ -1762,6 +1826,7 @@ impl App {
                  "channel":self.settings.channel,"block_off":self.settings.block_off},
             "page":page,
             "exts":self.ext_items(),
+            "pw":{"save":self.settings.pw_save,"count":self.vault.logins.len(),"sources":self.pw_sources},
             "update":{"ready":self.update_ready},
             "dls":self.downloads.iter().rev().take(30).collect::<Vec<_>>(),
             "filters":{"rules":self.blocker.engine.read().unwrap().rule_count,"total":self.blocker.total.load(Ordering::Relaxed)}});
@@ -2075,7 +2140,12 @@ impl App {
         let n = |k: &str| m[k].as_u64().unwrap_or(0) as usize;
         let t = m["t"].as_str().unwrap_or("");
         // Web pages may only send focus / shortcut messages.
-        if !trusted && !matches!(t, "focus" | "key" | "ai_sel" | "ext_add") {
+        if !trusted && !matches!(t, "focus" | "key" | "ai_sel" | "ext_add" | "pw_offer" | "pw_query" | "pw_fill") {
+            return;
+        }
+        // Password messages come from Wisp's own script in the page (it knows the session secret);
+        // the site they're for is always taken from the tab's address, never from the message.
+        if t.starts_with("pw_") && !trusted && (s("n") != self.nonce || from.is_none()) {
             return;
         }
         // Web pages may only ask to add an extension from the Chrome Web Store's own pages (the
@@ -2334,6 +2404,148 @@ impl App {
             }
             "ext_confirm" => self.ext_confirm(&s("id"), m["ok"].as_bool().unwrap_or(false)),
             "ext_list" => self.ext_emit(),
+            "pw_offer" => {
+                let Some(origin) = from.and_then(|id| self.tab_origin(id)) else {
+                    return;
+                };
+                let (user, pass) = (s("user"), s("pass"));
+                if store::is_private() || !self.settings.pw_save || pass.is_empty() || self.settings.pw_never.contains(&origin) {
+                    return;
+                }
+                let have = self.vault.for_origin(&origin);
+                if have.iter().any(|l| l.username == user && l.password == pass) {
+                    return;
+                }
+                let update = have.iter().any(|l| l.username == user);
+                self.chrome_emit(json!({"type":"pw_offer","site":passwords::site_of(&origin),"user":user,"update":update}));
+                self.pw_offer = Some((origin, user, pass));
+            }
+            "pw_answer" => {
+                if let Some((origin, user, pass)) = self.pw_offer.take() {
+                    match s("a").as_str() {
+                        "save" => {
+                            let msg = match self.vault.upsert(&origin, &user, &pass) {
+                                passwords::Upsert::Updated => "Password updated",
+                                _ => "Password saved",
+                            };
+                            self.vault.save();
+                            self.toast(msg);
+                            self.pw_emit();
+                        }
+                        "never" => {
+                            if !self.settings.pw_never.contains(&origin) {
+                                self.settings.pw_never.push(origin);
+                                store::save_settings(&self.settings);
+                            }
+                            self.pw_emit();
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            "pw_query" => {
+                let Some(id) = from else { return };
+                let Some(origin) = self.tab_origin(id) else { return };
+                let list: Vec<Value> = self
+                    .vault
+                    .for_origin(&origin)
+                    .iter()
+                    .map(|l| json!({"id":l.id,"user":l.username}))
+                    .collect();
+                if !list.is_empty() {
+                    self.eval_tab(id, &format!("window.__wispPwUsers&&window.__wispPwUsers({})", json!(list)));
+                }
+            }
+            "pw_fill" => {
+                let Some(id) = from else { return };
+                let Some(origin) = self.tab_origin(id) else { return };
+                let lid = m["id"].as_u64().unwrap_or(0);
+                let Some(l) = self.vault.get(lid).filter(|l| l.origin == origin).cloned() else {
+                    return;
+                };
+                self.eval_tab(
+                    id,
+                    &format!(
+                        "window.__wispPwFill&&window.__wispPwFill({},{},{})",
+                        json!(origin),
+                        json!(l.username),
+                        json!(l.password)
+                    ),
+                );
+                if let Some(x) = self.vault.logins.iter_mut().find(|x| x.id == lid) {
+                    x.used = library::now();
+                }
+                self.vault.save();
+            }
+            // ---- the Passwords page (Wisp's own page) ----
+            "pw_list" => self.pw_emit(),
+            "pw_reveal" => {
+                if let Some(id) = from {
+                    self.pw_with_user(PwAction::Reveal(id, m["id"].as_u64().unwrap_or(0)));
+                }
+            }
+            "pw_edit" => {
+                let Some(origin) = passwords::origin_of(&s("url")).or_else(|| passwords::origin_of(&format!("https://{}", s("url"))))
+                else {
+                    self.toast("Enter the website's address, like example.com");
+                    return;
+                };
+                let (user, pass, note) = (s("user"), s("pass"), s("note"));
+                let lid = m["id"].as_u64().unwrap_or(0);
+                match self.vault.logins.iter_mut().find(|l| l.id == lid && lid != 0) {
+                    Some(l) => {
+                        l.origin = origin;
+                        l.username = user;
+                        if !pass.is_empty() {
+                            l.password = pass;
+                        }
+                        l.note = note;
+                    }
+                    None if !pass.is_empty() => {
+                        self.vault.upsert(&origin, &user, &pass);
+                        if let Some(l) = self.vault.logins.iter_mut().find(|l| l.origin == origin && l.username == user) {
+                            l.note = note;
+                        }
+                    }
+                    None => {
+                        self.toast("Enter a password");
+                        return;
+                    }
+                }
+                self.vault.save();
+                self.toast("Password saved");
+                self.pw_emit();
+            }
+            "pw_delete" => {
+                if self.vault.delete(m["id"].as_u64().unwrap_or(0)) {
+                    self.vault.save();
+                    self.toast("Password deleted");
+                    self.pw_emit();
+                }
+            }
+            "pw_never_remove" => {
+                let o = s("origin");
+                self.settings.pw_never.retain(|x| x != &o);
+                store::save_settings(&self.settings);
+                self.pw_emit();
+            }
+            "pw_import" => self.pw_import(&s("src")),
+            "pw_open_export" => {
+                if let Err(e) = passwords::open_export_page(&s("src")) {
+                    self.toast(&e);
+                }
+            }
+            "pw_export" => self.pw_with_user(PwAction::Export),
+            "pw_manage" => {
+                let existing = self.space().tabs.iter().find(|t| t.url == PW_ID).map(|t| t.id);
+                match existing {
+                    Some(id) => self.select(id),
+                    None => self.open_tab(PW_ID, false),
+                }
+            }
+            "passkeys" => {
+                let _ = std::process::Command::new("explorer").arg("ms-settings:savedpasskeys").spawn();
+            }
             // Download (once) the store icons the Extensions page shows for popular extensions.
             "ext_icons" => {
                 let ids: Vec<String> = m["ids"]
@@ -2782,6 +2994,145 @@ impl App {
 
     fn toast(&self, text: &str) {
         self.chrome_emit(json!({"type":"toast","text":text}));
+    }
+
+    // ---- passwords ----
+    /// The origin of the page a tab shows (for saving and filling passwords).
+    fn tab_origin(&self, id: usize) -> Option<String> {
+        let (si, ti) = self.find_tab(id)?;
+        passwords::origin_of(&self.spaces[si].tabs[ti].url)
+    }
+
+    fn eval_tab(&self, id: usize, js: &str) {
+        if let Some((si, ti)) = self.find_tab(id) {
+            if let Some(v) = &self.spaces[si].tabs[ti].view {
+                let _ = v.evaluate_script(js);
+            }
+        }
+    }
+
+    fn pw_payload(&self, msg: Option<&str>) -> Value {
+        let mut items: Vec<&passwords::Login> = self.vault.logins.iter().collect();
+        items.sort_by(|a, b| {
+            passwords::site_of(&a.origin)
+                .cmp(&passwords::site_of(&b.origin))
+                .then(a.username.cmp(&b.username))
+        });
+        json!({
+            "items": items.iter().map(|l| json!({"id":l.id,"site":passwords::site_of(&l.origin),"origin":l.origin,"user":l.username,"note":l.note,"used":l.used,"created":l.created})).collect::<Vec<_>>(),
+            "never": self.settings.pw_never,
+            "save": self.settings.pw_save,
+            "sources": self.pw_sources,
+            "private": store::is_private(),
+            "msg": msg,
+            "theme": {"accent":self.settings.accent,"light":self.settings.light,"flat":!self.glass(),"font":self.settings.font},
+        })
+    }
+
+    /// Update the Passwords page(s) and the chrome (Settings shows the count).
+    fn pw_emit(&mut self) {
+        self.pw_send(None);
+        self.push_state();
+    }
+    fn pw_emit_msg(&mut self, msg: &str) {
+        self.pw_send(Some(msg));
+        self.push_state();
+    }
+    fn pw_send(&self, msg: Option<&str>) {
+        let payload = self.pw_payload(msg);
+        for s in &self.spaces {
+            for t in s.tabs.iter().filter(|t| t.url == PW_ID) {
+                if let Some(v) = &t.view {
+                    let _ = v.evaluate_script(&format!("window.wispPw&&window.wispPw({payload})"));
+                }
+            }
+        }
+    }
+
+    /// Showing, copying or exporting passwords first asks Windows to confirm it's the user
+    /// (Windows Hello), like Chrome and Edge. It stays unlocked for five minutes.
+    fn pw_with_user(&mut self, action: PwAction) {
+        if self.pw_unlocked.is_some_and(|t| t.elapsed() < Duration::from_secs(300)) {
+            self.pw_run(action);
+            return;
+        }
+        if self.pw_verifying {
+            return;
+        }
+        self.pw_verifying = true;
+        #[cfg(windows)]
+        let hwnd = {
+            use tao::platform::windows::WindowExtWindows;
+            self.window.hwnd()
+        };
+        #[cfg(not(windows))]
+        let hwnd = 0isize;
+        let p = self.proxy.clone();
+        std::thread::spawn(move || {
+            let ok = passwords::verify_user(hwnd, "Wisp wants to show your saved passwords").unwrap_or(false);
+            let _ = p.send_event(Ev::PwVerified(ok, action));
+        });
+    }
+
+    fn pw_run(&mut self, action: PwAction) {
+        match action {
+            PwAction::Reveal(tab, id) => {
+                if let Some(l) = self.vault.get(id) {
+                    self.eval_tab(
+                        tab,
+                        &format!("window.wispPwReveal&&window.wispPwReveal({id},{})", json!(l.password)),
+                    );
+                }
+            }
+            PwAction::Export => {
+                let csv = self.vault.to_csv();
+                let p = self.proxy.clone();
+                std::thread::spawn(move || {
+                    let Some(path) = rfd::FileDialog::new()
+                        .set_file_name("Wisp Passwords.csv")
+                        .add_filter("CSV", &["csv"])
+                        .save_file()
+                    else {
+                        return;
+                    };
+                    let msg = match fs::write(&path, csv) {
+                        Ok(()) => {
+                            "Passwords exported. Anyone who opens that file can read them, so delete it when you're done.".to_string()
+                        }
+                        Err(e) => format!("Couldn't save the file: {e}"),
+                    };
+                    let _ = p.send_event(Ev::Toast(msg));
+                });
+            }
+        }
+    }
+
+    /// Import from a Chromium browser on this PC (`src` = its id) or from a CSV file ("csv").
+    fn pw_import(&mut self, src: &str) {
+        let p = self.proxy.clone();
+        if src == "csv" {
+            std::thread::spawn(move || {
+                let Some(path) = rfd::FileDialog::new().add_filter("Passwords (CSV)", &["csv"]).pick_file() else {
+                    return;
+                };
+                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                let r = fs::read(&path)
+                    .map_err(|e| e.to_string())
+                    .map(|b| String::from_utf8_lossy(&b).into_owned())
+                    .and_then(|t| passwords::parse_csv(&t))
+                    .map(|logins| passwords::BrowserImport { logins, locked: 0 });
+                let _ = p.send_event(Ev::PwImported(name, r));
+            });
+            return;
+        }
+        let Some((_, name, dir)) = passwords::chromium_sources().into_iter().find(|(id, _, _)| *id == src) else {
+            return;
+        };
+        self.pw_emit_msg(&format!("Importing from {name}…"));
+        std::thread::spawn(move || {
+            let r = passwords::read_chromium(&dir);
+            let _ = p.send_event(Ev::PwImported(name.to_string(), r));
+        });
     }
 
     // ---- Chrome extensions ----
@@ -3447,6 +3798,7 @@ impl App {
                 self.https.store(on, Ordering::Relaxed);
             }
             "suggest" => self.settings.suggest = v.as_bool().unwrap_or(true),
+            "pw_save" => self.settings.pw_save = v.as_bool().unwrap_or(true),
             "auto_update" => self.settings.auto_update = v.as_bool().unwrap_or(true),
             "hibernate_s" => self.settings.hibernate_s = v.as_u64().unwrap_or(30).min(4 * 3600) as u32,
             "channel" => {
@@ -3779,6 +4131,45 @@ impl App {
             }
             Ev::NewWindow(u) => self.open_tab(&u, false),
             Ev::ExtFetched(id, r) => self.ext_fetched(&id, *r),
+            Ev::PwVerified(ok, action) => {
+                self.pw_verifying = false;
+                if ok {
+                    self.pw_unlocked = Some(Instant::now());
+                    self.pw_run(action);
+                } else {
+                    self.toast("Windows didn't confirm it's you");
+                }
+            }
+            Ev::PwImported(from, r) => match r {
+                Ok(imp) => {
+                    let n = imp.logins.len();
+                    let (a, u, _) = self.vault.merge(imp.logins);
+                    self.vault.save();
+                    let mut msg = if n == 0 {
+                        format!("No passwords found in {from}")
+                    } else {
+                        format!(
+                            "Imported {a} new password{} from {from}{}",
+                            if a == 1 { "" } else { "s" },
+                            if u > 0 { format!(", updated {u}") } else { String::new() }
+                        )
+                    };
+                    if imp.locked > 0 {
+                        msg.push_str(&format!(
+                            ". {} {} locked by {from} so only it can read {}: use “Export a file” to save them from {from}, then import that file.",
+                            imp.locked,
+                            if imp.locked == 1 { "password is" } else { "passwords are" },
+                            if imp.locked == 1 { "it" } else { "them" }
+                        ));
+                    }
+                    self.pw_emit_msg(&msg);
+                    self.toast(&msg);
+                }
+                Err(e) => {
+                    self.pw_emit_msg(&e);
+                    self.toast(&e);
+                }
+            },
             Ev::StoreIcons => {
                 for s in &self.spaces {
                     for t in s.tabs.iter().filter(|t| t.url == EXT_ID) {
@@ -4215,6 +4606,14 @@ fn main() {
         ext_busy: HashSet::new(),
         ext_popup: None,
         ext_popup_n: 0,
+        vault: passwords::Vault::load(),
+        pw_offer: None,
+        pw_unlocked: None,
+        pw_verifying: false,
+        pw_sources: json!(passwords::chromium_sources()
+            .iter()
+            .map(|(id, n, _)| json!({"id":id,"name":n}))
+            .collect::<Vec<_>>()),
     };
     if !private {
         let list = app.exts.clone();

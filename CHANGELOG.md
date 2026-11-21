@@ -6,6 +6,25 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-21
+
+### Added
+- Passwords. When you sign in to a site, Wisp offers to save the password (or update it), and fills
+  it next time from a menu under the sign-in field. Saved passwords are encrypted for your Windows
+  account, and showing, copying or exporting them asks Windows Hello first.
+  - The Passwords page (`wisp://passwords`, the ⋯ menu, or Settings → Passwords): search, show,
+    copy, add, edit and delete passwords, sites you chose "Never" for, and export to a CSV file.
+  - Import from Google Chrome, Microsoft Edge, Brave and Vivaldi on this PC, or from a CSV exported
+    by any browser or password manager (Firefox, Safari, Bitwarden, 1Password, LastPass and others).
+    Passwords that Chrome locks to itself can't be read by other apps; "Export a file" opens the
+    browser's own export page so they can be imported that way.
+  - Passkeys can't be imported: Chrome, Edge and Google Password Manager don't let passkeys leave
+    them. Sites still let you sign in with them in Wisp through Windows Hello or your phone.
+
+### Changed
+- Closing a tab: the tab shrinks out of its place and the tabs after it slide over, instead of every
+  tab jumping and sliding back.
+
 ## [0.4.1] - 2026-11-21
 
 ### Changed

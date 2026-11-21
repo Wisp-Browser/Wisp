@@ -85,6 +85,10 @@ pub struct Settings {
     pub bmbar: bool,
     /// Extensions pinned to the toolbar (their IDs, in order).
     pub ext_pins: Vec<String>,
+    /// Offer to save passwords when signing in.
+    pub pw_save: bool,
+    /// Sites where Wisp never offers to save passwords (origins).
+    pub pw_never: Vec<String>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -112,6 +116,8 @@ impl Default for Settings {
             font: "inter".into(),
             bmbar: true,
             ext_pins: vec![],
+            pw_save: true,
+            pw_never: vec![],
         }
     }
 }

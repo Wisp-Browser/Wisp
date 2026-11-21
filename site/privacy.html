@@ -28,6 +28,7 @@
   <h2>What stays on your device</h2>
   <ul>
     <li><b>Windows:</b> settings, open tabs, history, bookmarks, downloads list and site data are kept in <code>%APPDATA%\Wisp</code>. Private windows use a temporary folder that is deleted when the window closes.</li>
+    <li><b>Saved passwords</b> (Windows) are kept in <code>%APPDATA%\Wisp</code>, encrypted for your Windows account. Importing from another browser reads its saved passwords on this PC; nothing is sent anywhere.</li>
     <li><b>AI keys</b> you add for your own providers are stored in Windows Credential Manager, not in Wisp's files.</li>
     <li><b>iPhone and iPad:</b> tabs, bookmarks and settings are kept inside the app. Website data is kept by iOS's WebKit for the app.</li>
     <li>Wisp does not upload any of this anywhere. Uninstalling Wisp (and deleting <code>%APPDATA%\Wisp</code> on Windows) removes it.</li>

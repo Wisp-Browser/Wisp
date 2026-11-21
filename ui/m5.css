@@ -46,6 +46,14 @@ body.private #tint{background:color-mix(in srgb,#7c4dff 14%,var(--frame))}
 #pop .xnone{padding:6px 10px 10px;color:var(--fg2);font-size:12.5px;line-height:1.45}
 #pop.xpop{min-width:280px;max-width:320px}
 #extbox{width:420px}
+/* the "Save password?" prompt under the toolbar */
+#pwbar{position:fixed;display:none;z-index:8;right:12px;width:320px;padding:16px;border-radius:var(--r-lg);transform-origin:top right}
+#pwbar.open{display:block;animation:menuin var(--dur) var(--ease) both}
+#pwbar .ph{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+#pwbar .ph .ki{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--accent-soft);color:var(--fg);flex:none}
+#pwbar b{display:block;font-size:14px;font-weight:600;line-height:1.3}
+#pwbar small{display:block;color:var(--fg2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pwbar .row2{display:flex;justify-content:flex-end;gap:8px}
 #extbox .xh{display:flex;gap:14px;align-items:center;margin-bottom:12px}
 #extbox .xh img,#extbox .xh .xl0{width:44px;height:44px;border-radius:12px;font-size:20px}
 #extbox h3{margin:0;font-size:16px;line-height:1.35}
