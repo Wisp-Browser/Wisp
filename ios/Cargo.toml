@@ -1,6 +1,6 @@
 [package]
 name = "wisp-ios"
-version = "0.2.10"
+version = "0.3.0"
 edition = "2021"
 description = "Wisp for iPhone and iPad"
 license = "MIT"
