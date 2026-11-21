@@ -255,7 +255,11 @@ function syncTabs(){const sc=$('#tabs'),pins=S.tabs.filter(t=>t.pinned),rest=S.t
   const sig=want.map(e=>e._t?e._t.id:e.className).join(',');
   if(sig!==tabSig){
    // FLIP: remember where tabs were, change the DOM, then slide them from old to new spots (transform only).
-   const anim=!firstRender&&!RM.matches&&tabSig!=='',before=new Map();
+   // Opening/closing tabs in quick succession: skip the slide and fade animations (and clear any
+   // still running), so tabs never pile up on top of each other.
+   const now=performance.now(),rapid=now-lastTabChange<260;lastTabChange=now;
+   if(rapid){document.querySelectorAll('.tab.ghost').forEach(g=>g.remove());tabEls.forEach(el=>{el.style.transition='';el.style.transform='';el.classList.remove('new')})}
+   const anim=!firstRender&&!RM.matches&&tabSig!==''&&!rapid,before=new Map();
    if(anim)tabEls.forEach((el,id)=>{if(el.isConnected)before.set(id,el.getBoundingClientRect())});
    const ids=new Set(S.tabs.map(t=>t.id));
    tabEls.forEach((el,id)=>{if(!ids.has(id)){if(anim&&el.isConnected&&before.has(id))ghost(el,before.get(id));tabEls.delete(id)}});
@@ -283,7 +287,7 @@ function applyChrome(){const glass=!!S.glass_on&&!!S.glass_ok,lay=SLOTS[S.layout
 const FONT_IDS=['inter','rounded','system','serif','mono'];
 function applyFont(f){const b=document.body.classList;FONT_IDS.forEach(k=>b.toggle('f-'+k,k===(f||'inter')))}
 // Bookmarks bar: click opens in this tab, middle- or Ctrl-click in a new tab.
-let bmSig='',urlTab=0;const bmEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let bmSig='',urlTab=0,lastTabChange=0;const bmEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function renderBm(){const on=!!S.bmbar&&(S.bms||[]).length>0;document.body.classList.toggle('hasbm',on);
  const sig=on?JSON.stringify(S.bms):'';if(sig===bmSig)return;bmSig=sig;
  $('#bml').innerHTML=on?S.bms.map(b=>`<button class="bmc" data-u="${bmEsc(b.url)}" title="${bmEsc(b.title)}\n${bmEsc(b.url)}"><i class="f">${ic(b)}</i><span>${bmEsc(b.title||b.url)}</span></button>`).join(''):'';

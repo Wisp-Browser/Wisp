@@ -61,6 +61,8 @@ const CONTENT_PAD: f64 = 8.0;
 const TOP_CLASSIC: f64 = 86.0; // tab strip (40) + toolbar (44) + gap
 const TOP_SLIM: f64 = 48.0; // one 46px row (Compact, Vertical) + gap
 const BMBAR_H: f64 = 32.0; // bookmarks bar under the toolbar
+/// While tabs are opened/closed faster than this, building their pages waits.
+const BUILD_PAUSE: Duration = Duration::from_millis(150);
 const SIDE_W: f64 = 232.0; // Vertical: tab sidebar
 const SIDE_W_MIN: f64 = 52.0; // Vertical: collapsed sidebar
 const AI_HEAD: f64 = 92.0; // height of the AI panel header (mirrored in ui/ai.css)
@@ -206,6 +208,8 @@ enum Ev {
     Ready(usize),
     LoadStart(usize),
     MakeSpare(usize),
+    /// Build the pages that were put off while tabs were being opened or closed quickly.
+    BuildViews,
     HibernateAt(usize, f64),
     /// Give unused engine memory back to Windows (see `release_memory`).
     Release,
@@ -238,6 +242,9 @@ struct Tab {
     low: bool,
     /// Scroll position to restore after a hibernated tab reloads.
     scroll: f64,
+    /// Visibility and bounds last applied to the view, so unchanged pages aren't touched again.
+    vis: Option<bool>,
+    at: Option<R>,
     opened: bool,
     ready: bool,
     block: Option<Arc<blocker::TabBlock>>,
@@ -258,6 +265,8 @@ impl Tab {
             last_active: Instant::now(),
             low: false,
             scroll: 0.0,
+            vis: None,
+            at: None,
             opened: false,
             ready: false,
             block: None,
@@ -856,6 +865,13 @@ struct App {
     combos: Vec<String>,
     fullscreen: bool,
     graveyard: Vec<WebView>,
+    /// How many graveyard views have already been hidden.
+    graveyard_hidden: usize,
+    /// Last time the user opened, closed or switched tabs (pages are built once they pause).
+    last_tab_op: Instant,
+    /// The last tab action came right after the one before it (the user is going fast).
+    rapid: bool,
+    build_due: bool,
     spare: Option<(usize, Built)>,
     last_state: String,
     update_ready: Option<String>,
@@ -1100,6 +1116,12 @@ impl App {
                 None
             }
         };
+        // No ready page: while tabs are being opened or closed quickly, build later, once (for
+        // whichever tab is showing then) instead of freezing for every tab.
+        if spare.is_none() && (self.build_due || (self.rapid && self.busy_with_tabs(BUILD_PAUSE))) {
+            self.schedule_build();
+            return;
+        }
         let (built, ready) = match spare {
             Some(b) => (Some(b), true),
             None => (self.build_view(si, tid, &url, rect), false),
@@ -1107,6 +1129,8 @@ impl App {
         if let Some(b) = built {
             let t = &mut self.spaces[si].tabs[ti];
             t.view = Some(b.view);
+            t.vis = None;
+            t.at = None;
             t.block = Some(b.block);
             t.opened = true;
             t.ready = ready;
@@ -1188,9 +1212,13 @@ impl App {
                     let idx = if si == cur { ids.iter().position(|x| *x == t.id) } else { None };
                     match idx {
                         Some(i) if show => {
-                            let _ = v.set_bounds(to_rect(rects[i]));
-                            if t.ready {
+                            if t.at != Some(rects[i]) {
+                                let _ = v.set_bounds(to_rect(rects[i]));
+                                t.at = Some(rects[i]);
+                            }
+                            if t.ready && t.vis != Some(true) {
                                 let _ = v.set_visible(true);
+                                t.vis = Some(true);
                             }
                             if t.low {
                                 t.low = false;
@@ -1198,8 +1226,9 @@ impl App {
                             }
                         }
                         _ => {
-                            if !hold {
+                            if !hold && t.vis != Some(false) {
                                 let _ = v.set_visible(false);
+                                t.vis = Some(false);
                                 // Hidden pages drop caches and trim their memory right away.
                                 if !t.low && t.ready {
                                     t.low = true;
@@ -1211,10 +1240,11 @@ impl App {
                 }
             }
         }
-        if !hold && !self.graveyard.is_empty() {
-            for v in &self.graveyard {
+        if !hold && self.graveyard_hidden < self.graveyard.len() {
+            for v in &self.graveyard[self.graveyard_hidden..] {
                 let _ = v.set_visible(false);
             }
+            self.graveyard_hidden = self.graveyard.len();
         }
         let want_web = self.ai_open && self.ai_web_url.is_some() && show && !self.ai_web_hide && !full;
         if want_web {
@@ -1568,6 +1598,32 @@ impl App {
     fn bookmarks_changed(&mut self) {
         self.chrome_shape.clear();
         self.refresh();
+    }
+
+    /// The user opened, closed or switched tabs within `d`.
+    fn busy_with_tabs(&self, d: Duration) -> bool {
+        self.last_tab_op.elapsed() < d
+    }
+
+    fn tab_op(&mut self) {
+        self.rapid = self.busy_with_tabs(BUILD_PAUSE * 2);
+        self.last_tab_op = Instant::now();
+    }
+
+    fn schedule_build(&mut self) {
+        if !self.build_due {
+            self.build_due = true;
+            self.later(BUILD_PAUSE.as_millis() as u64 + 10, Ev::BuildViews);
+        }
+    }
+
+    /// Send `ev` to ourselves after `ms`.
+    fn later(&self, ms: u64, ev: Ev) {
+        let p = self.proxy.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(ms));
+            let _ = p.send_event(ev);
+        });
     }
 
     fn refresh(&mut self) {
@@ -2054,9 +2110,18 @@ impl App {
                     }
                 }
             }
-            "new" => self.open_tab(NEWTAB_ID, false),
-            "close" => self.close(n("id")),
-            "select" => self.select(n("id")),
+            "new" => {
+                self.tab_op();
+                self.open_tab(NEWTAB_ID, false);
+            }
+            "close" => {
+                self.tab_op();
+                self.close(n("id"));
+            }
+            "select" => {
+                self.tab_op();
+                self.select(n("id"));
+            }
             "move" => self.move_tab(n("id"), n("to")),
             "pin" => self.toggle_pin(n("id")),
             "mute" => self.toggle_mute(n("id")),
@@ -2072,6 +2137,7 @@ impl App {
             }
             // Ctrl+Shift+T: bring back the most recently closed tab (in its own space if it still exists).
             "reopen" => {
+                self.tab_op();
                 if let Some((sid, url)) = self.closed.pop() {
                     if let Some(si) = self.spaces.iter().position(|s| s.id == sid) {
                         if si != self.cur {
@@ -2897,8 +2963,20 @@ impl App {
                 }
             }
             Ev::Reap => {
-                if !self.graveyard.is_empty() {
+                // Destroying a page costs a moment; don't do it while tabs are being opened or closed.
+                if self.busy_with_tabs(Duration::from_millis(700)) {
+                    self.later(600, Ev::Reap);
+                } else if !self.graveyard.is_empty() {
                     self.graveyard.remove(0);
+                    self.graveyard_hidden = self.graveyard_hidden.saturating_sub(1);
+                }
+            }
+            Ev::BuildViews => {
+                self.build_due = false;
+                if self.busy_with_tabs(BUILD_PAUSE) {
+                    self.schedule_build();
+                } else {
+                    self.sync_views();
                 }
             }
             Ev::Ready(id) => {
@@ -2915,7 +2993,14 @@ impl App {
                 }
                 self.push_state();
             }
-            Ev::MakeSpare(sid) => self.make_spare(sid),
+            // The spare New Tab page is made once the user has stopped opening/closing tabs.
+            Ev::MakeSpare(sid) => {
+                if self.busy_with_tabs(Duration::from_millis(1200)) || self.build_due {
+                    self.later(800, Ev::MakeSpare(sid));
+                } else {
+                    self.make_spare(sid);
+                }
+            }
             Ev::HibernateAt(id, y) => self.hibernate_at(id, y),
             Ev::Release => {
                 self.release_due = false;
@@ -3353,6 +3438,10 @@ fn main() {
         combos: vec![],
         fullscreen: false,
         graveyard: vec![],
+        graveyard_hidden: 0,
+        last_tab_op: Instant::now().checked_sub(Duration::from_secs(5)).unwrap_or_else(Instant::now),
+        rapid: false,
+        build_due: false,
         spare: None,
         last_state: String::new(),
         update_ready: None,

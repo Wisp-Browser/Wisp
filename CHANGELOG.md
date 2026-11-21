@@ -6,6 +6,19 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-11-20
+
+### Fixed
+- Opening or closing tabs quickly is smooth and every key press counts. Before, each new tab
+  froze Wisp for up to 280 ms and presses were lost.
+  - While tabs are opened, closed or switched in quick succession, the tab strip updates
+    instantly and the page is built once you pause, for the tab you land on. A single new tab
+    or click is still immediate.
+  - The spare New Tab page and destroying closed pages also wait until you pause.
+  - Unchanged pages are no longer re-shown and re-hidden on every update.
+  - Tab animations are skipped during a burst, so closing tabs no longer pile up on top of each
+    other.
+
 ## [0.2.8] - 2026-11-20
 
 ### Added
