@@ -6,6 +6,19 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-11-20
+
+### Added
+- Wisp reopens how you left it: window size and position, maximized, and full screen. If that
+  monitor is gone, it opens at the default size instead.
+- Right-click a bookmark on the bookmarks bar to open it in a new tab, copy its address, edit its
+  name and address, or delete it.
+
+### Fixed
+- Menus are fully solid, so their text is easy to read over bright pages.
+- iPhone: the New Tab wallpaper now fills the screen behind the status bar and the glass bar (no
+  more dark band), and shortcut names stay on one line.
+
 ## [0.2.5] - 2026-11-20
 
 ### Changed (iPhone and iPad)

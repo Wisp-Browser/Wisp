@@ -12,7 +12,7 @@ body.noclock .clock,body.noclock .hi,body.nodial .dial{display:none}
 body.wl{--fg:#15131f;--glass:rgba(255,255,255,.6);--line:rgba(20,20,40,.1)}body.wd{--fg:#fff;--glass:rgba(255,255,255,.12);--line:rgba(255,255,255,.18)}
 body.walled{background:var(--wall)!important;background-attachment:fixed!important}
 body{background:radial-gradient(120% 80% at 15% 0%,#3b2a7a 0%,transparent 60%),radial-gradient(100% 70% at 100% 100%,#7a2a4f 0%,transparent 55%),#14121f;min-height:100vh;
- display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top) + 9vh) 20px 30px}
+ display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top) + 11vh) 20px calc(env(safe-area-inset-bottom) + 120px)}
 @media (prefers-color-scheme:light){:root{--fg:#15131f;--glass:rgba(255,255,255,.6);--line:rgba(20,20,40,.1);color-scheme:light}
  body{background:radial-gradient(120% 80% at 15% 0%,#d9d2ff 0%,transparent 60%),radial-gradient(100% 70% at 100% 100%,#ffd3e2 0%,transparent 55%),#f4f3f9}}
 .clock{font-size:64px;font-weight:200;letter-spacing:-.02em;line-height:1}
@@ -22,8 +22,9 @@ form{margin-top:30px;width:100%;max-width:520px;height:50px;border-radius:25px;b
 form svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;opacity:.7;flex:none}
 input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--fg);font:inherit;font-size:17px}
 input::placeholder{color:var(--fg);opacity:.6}
-.dial{margin-top:34px;display:grid;grid-template-columns:repeat(4,72px);gap:18px 14px;justify-content:center}
-.dial a{display:flex;flex-direction:column;align-items:center;gap:7px;color:var(--fg);text-decoration:none;font-size:12px}
+.dial{margin-top:34px;display:grid;grid-template-columns:repeat(4,76px);gap:18px 10px;justify-content:center}
+.dial a{display:flex;flex-direction:column;align-items:center;gap:7px;color:var(--fg);text-decoration:none;font-size:12px;min-width:0}
+.dial a span{max-width:76px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
 .dial i{width:60px;height:60px;border-radius:18px;background:var(--glass);border:1px solid var(--line);display:grid;place-items:center;font-style:normal;font-size:24px;font-weight:700}
 .dial a:active i{transform:scale(.94)}
 </style></head><body>
@@ -32,14 +33,14 @@ input::placeholder{color:var(--fg);opacity:.6}
 <form id="f" action="#"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
  <input id="q" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" placeholder="Search or enter address"></form>
 <div class="dial">
- <a href="https://www.youtube.com/"><i style="color:#ff3b30">▶</i>YouTube</a>
- <a href="https://en.m.wikipedia.org/"><i>W</i>Wikipedia</a>
- <a href="https://www.reddit.com/"><i style="color:#ff5700">r</i>Reddit</a>
- <a href="https://github.com/"><i>⌘</i>GitHub</a>
- <a href="https://news.ycombinator.com/"><i style="color:#ff6600">Y</i>Hacker News</a>
- <a href="https://maps.google.com/"><i style="color:#34c759">⌖</i>Maps</a>
- <a href="https://duckduckgo.com/"><i style="color:#de5833">D</i>DuckDuckGo</a>
- <a href="https://www.bbc.com/news"><i>B</i>BBC News</a>
+ <a href="https://www.youtube.com/"><i style="color:#ff3b30">▶</i><span>YouTube</span></a>
+ <a href="https://en.m.wikipedia.org/"><i>W</i><span>Wikipedia</span></a>
+ <a href="https://www.reddit.com/"><i style="color:#ff5700">r</i><span>Reddit</span></a>
+ <a href="https://github.com/"><i>⌘</i><span>GitHub</span></a>
+ <a href="https://news.ycombinator.com/"><i style="color:#ff6600">Y</i><span>Hacker News</span></a>
+ <a href="https://maps.google.com/"><i style="color:#34c759">⌖</i><span>Maps</span></a>
+ <a href="https://duckduckgo.com/"><i style="color:#de5833">D</i><span>DuckDuckGo</span></a>
+ <a href="https://www.bbc.com/news"><i>B</i><span>BBC News</span></a>
 </div>
 <script>
 const pad=n=>String(n).padStart(2,'0');

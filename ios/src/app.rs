@@ -145,10 +145,16 @@ impl Browser {
         }
     }
 
-    /// Extra scroll room so page content can scroll clear of the floating glass bar.
+    /// Extra scroll room so page content can scroll clear of the floating glass bar. The New Tab
+    /// page instead fills the whole screen (its wallpaper runs behind the status bar and the glass)
+    /// and leaves room itself.
     fn inset_page(&self, v: &WKWebView) {
+        let sv = unsafe { v.scrollView() };
+        let newtab = self.tab_of(v).and_then(|id| self.s.tab(id)).is_some_and(|t| t.url.is_empty());
+        // UIScrollViewContentInsetAdjustmentBehavior: 0 = automatic, 2 = never.
+        let _: () = unsafe { msg_send![&*sv, setContentInsetAdjustmentBehavior: if newtab { 2isize } else { 0isize }] };
         let bm = if self.s.bmbar_shown() { BM_H } else { 0.0 };
-        let extra = if self.s.settings.glass { PAGE_INSET + bm } else { 0.0 };
+        let extra = if self.s.settings.glass && !newtab { PAGE_INSET + bm } else { 0.0 };
         let top = self.top_bar();
         let i = UIEdgeInsets {
             top: if top { extra } else { 0.0 },
@@ -156,7 +162,6 @@ impl Browser {
             bottom: if top { 0.0 } else { extra },
             right: 0.0,
         };
-        let sv = unsafe { v.scrollView() };
         sv.setContentInset(i);
         sv.setVerticalScrollIndicatorInsets(i);
     }
@@ -644,6 +649,8 @@ impl Browser {
                 }
             }
         }
+        // Leaving (or returning to) the New Tab page changes how the page sits under the bar.
+        self.inset_page(wv);
         self.push();
         if !loading {
             self.save();

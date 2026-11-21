@@ -1,6 +1,6 @@
 [package]
 name = "wisp"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 description = "A lightweight, fast, glassy desktop browser built on the system webview."
 license = "MIT"

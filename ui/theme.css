@@ -1,5 +1,5 @@
 /* Wisp design tokens. Glass and Flat share every token name; switching style or theme only swaps values.
-   body classes: .glass | .flat   ×   (default dark) | .light */
+   body classes: .glass | .flat   Ã—   (default dark) | .light */
 :root{
  --accent:#5e5ce6;--accent-fg:#fff;
  --font:"Wisp Inter",system-ui,"Segoe UI Variable Text","Segoe UI",sans-serif;
@@ -19,14 +19,14 @@ body.f-rounded{--font:"Wisp Nunito","Segoe UI Variable Text","Segoe UI",sans-ser
 body.f-system{--font:system-ui,"Segoe UI Variable Text","Segoe UI",sans-serif;font-feature-settings:normal}
 body.f-serif{--font:Charter,"Bitstream Charter",Cambria,Georgia,serif;font-feature-settings:normal}
 body.f-mono{--font:"Cascadia Code","Cascadia Mono",Consolas,monospace;font-feature-settings:normal}
-/* ---- Dark · Glass (default) ---- */
+/* ---- Dark Â· Glass (default) ---- */
 body{
  --bg:#121218;            /* window base when no OS backdrop shows */
  --frame:rgba(18,18,26,.38);/* tint over the OS backdrop / wallpaper behind the bars */
  --surface:rgba(30,30,42,var(--sa,.7)); /* sidebar, cards (no blur: sits on the OS-blurred backdrop) */
  --raised:rgba(255,255,255,.075);       /* omnibox, inputs, active tab */
  --raised-2:rgba(255,255,255,.11);
- --menu:rgba(30,30,42,.96);             /* popups: GPU blur over the chrome, solid enough over pages */
+ --menu:rgba(30,30,42,1);              /* popups: solid, so they read cleanly over pages */
  --veil:rgba(8,8,14,.38);
  --hover:rgba(255,255,255,.07);--press:rgba(255,255,255,.12);
  --line:rgba(255,255,255,.08);--line-2:rgba(255,255,255,.14);
@@ -45,7 +45,7 @@ body.light{
  --surface:rgba(255,255,255,var(--sa,.7));
  --raised:rgba(255,255,255,.72);
  --raised-2:rgba(255,255,255,.92);
- --menu:rgba(252,252,255,.96);
+ --menu:rgba(252,252,255,1);
  --veil:rgba(30,32,48,.16);
  --hover:rgba(20,20,40,.055);--press:rgba(20,20,40,.1);
  --line:rgba(20,20,40,.09);--line-2:rgba(20,20,40,.16);

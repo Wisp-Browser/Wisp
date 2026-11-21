@@ -405,6 +405,83 @@ fn browser_args() -> String {
     a
 }
 
+/// The window as the user left it (window.json): its normal (restored) frame in physical pixels,
+/// and whether it was maximized or full screen.
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Copy, PartialEq, Debug)]
+#[serde(default)]
+struct WinState {
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+    maximized: bool,
+    fullscreen: bool,
+}
+
+impl WinState {
+    /// Usable if a reasonable part of the window's title area lands on one of `monitors`
+    /// (x, y, w, h), so a window never comes back off-screen after a monitor was unplugged.
+    fn fits(&self, monitors: &[(i32, i32, u32, u32)]) -> bool {
+        if self.w < 400 || self.h < 300 {
+            return false;
+        }
+        monitors.iter().any(|&(mx, my, mw, mh)| {
+            let (l, t) = (self.x.max(mx), self.y.max(my));
+            let (r, b) = ((self.x + self.w as i32).min(mx + mw as i32), (self.y + 40).min(my + mh as i32));
+            r - l >= 120 && b - t >= 20
+        })
+    }
+}
+
+/// The window's normal (restored) frame as Windows records it, which stays right while the window
+/// is maximized, minimized or full screen.
+#[cfg(windows)]
+fn normal_frame(window: &Window) -> Option<(i32, i32, u32, u32)> {
+    use tao::platform::windows::WindowExtWindows;
+    use windows::Win32::{
+        Foundation::HWND,
+        UI::WindowsAndMessaging::{GetWindowPlacement, WINDOWPLACEMENT},
+    };
+    let mut wp = WINDOWPLACEMENT {
+        length: std::mem::size_of::<WINDOWPLACEMENT>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: reads our own window's placement into a correctly sized struct.
+    unsafe { GetWindowPlacement(HWND(window.hwnd() as _), &mut wp) }.ok()?;
+    let r = wp.rcNormalPosition;
+    let (w, h) = (r.right - r.left, r.bottom - r.top);
+    (w > 0 && h > 0).then_some((r.left, r.top, w as u32, h as u32))
+}
+#[cfg(not(windows))]
+fn normal_frame(_window: &Window) -> Option<(i32, i32, u32, u32)> {
+    None
+}
+
+/// Give the (still hidden) window its saved normal frame.
+#[cfg(windows)]
+fn set_normal_frame(window: &Window, (x, y, w, h): (i32, i32, u32, u32)) {
+    use tao::platform::windows::WindowExtWindows;
+    use windows::Win32::{
+        Foundation::{HWND, RECT},
+        UI::WindowsAndMessaging::{SetWindowPlacement, SW_HIDE, WINDOWPLACEMENT},
+    };
+    let wp = WINDOWPLACEMENT {
+        length: std::mem::size_of::<WINDOWPLACEMENT>() as u32,
+        showCmd: SW_HIDE.0 as u32,
+        rcNormalPosition: RECT {
+            left: x,
+            top: y,
+            right: x + w as i32,
+            bottom: y + h as i32,
+        },
+        ..Default::default()
+    };
+    // SAFETY: sets our own window's placement from a correctly sized struct; it stays hidden.
+    let _ = unsafe { SetWindowPlacement(HWND(window.hwnd() as _), &wp) };
+}
+#[cfg(not(windows))]
+fn set_normal_frame(_window: &Window, _f: (i32, i32, u32, u32)) {}
+
 /// Single place where child webviews are attached to the window.
 fn base_builder(window: &Window) -> WebViewBuilder<'_> {
     let b = WebViewBuilder::new_as_child(window);
@@ -746,6 +823,11 @@ struct App {
     last_release: Instant,
     /// A memory release is already scheduled.
     release_due: bool,
+    /// How the window was left last time, brought back on the first show.
+    restore: Option<WinState>,
+    /// The normal frame from just before full screen (full screen resizes the window itself, so
+    /// Windows' own record of it is overwritten).
+    pre_fs: Option<(i32, i32, u32, u32)>,
     holes: Vec<(R, f64)>,
     elem_fs: Option<usize>,
     pending: HashMap<String, Pending>,
@@ -1700,6 +1782,15 @@ impl App {
                     self.bookmarks_changed();
                 }
             }
+            "bm_edit" => {
+                let nu = s("nurl");
+                let nu = if nu.contains("://") { nu } else { format!("https://{nu}") };
+                if self.lib.edit_bookmark(&s("url"), &nu, &s("title")) {
+                    self.bookmarks_changed();
+                } else {
+                    self.toast("That address isn't a web page");
+                }
+            }
             "bm_del" => {
                 let u = s("url");
                 self.lib.bookmarks.retain(|b| b.url != u);
@@ -1741,6 +1832,7 @@ impl App {
             "suggest" => self.suggest(&s("q"), m["n"].as_u64().unwrap_or(0)),
             "upd_check" => self.start_update_check(true),
             "update_apply" => {
+                self.save_window();
                 store::flush();
                 match std::env::current_exe()
                     .map_err(|e| e.to_string())
@@ -2031,6 +2123,7 @@ impl App {
                     let _ = self.window.drag_window();
                 }
                 "close" => {
+                    self.save_window();
                     store::flush();
                     store::cleanup_private();
                     std::process::exit(0)
@@ -2070,14 +2163,46 @@ impl App {
 
     /// The window starts hidden and appears once the chrome has painted, so a transparent window
     /// never flashes see-through at startup.
-    fn show_window(&self) {
+    fn show_window(&mut self) {
         if !self.window.is_visible() {
             self.window.set_visible(true);
+            if let Some(r) = self.restore.take() {
+                if r.maximized {
+                    self.window.set_maximized(true);
+                }
+                if r.fullscreen {
+                    self.fullscreen = true;
+                    self.apply_fullscreen();
+                }
+            }
             self.window.set_focus();
         }
     }
 
+    /// Save the window as it is now, for the next start (not for private windows).
+    fn save_window(&mut self) {
+        if store::is_private() {
+            return;
+        }
+        let frame = if self.window.fullscreen().is_some() { self.pre_fs } else { None };
+        let Some((x, y, w, h)) = frame.or_else(|| normal_frame(&self.window)) else {
+            return;
+        };
+        let st = WinState {
+            x,
+            y,
+            w,
+            h,
+            maximized: self.window.is_maximized(),
+            fullscreen: self.fullscreen,
+        };
+        store::save_json("window.json", &st);
+    }
+
     fn apply_fullscreen(&mut self) {
+        if self.page_full() && self.window.fullscreen().is_none() {
+            self.pre_fs = normal_frame(&self.window);
+        }
         self.window.set_fullscreen(if self.page_full() {
             Some(Fullscreen::Borderless(None))
         } else {
@@ -2900,6 +3025,17 @@ fn main() {
     let event_loop = EventLoopBuilder::<Ev>::with_user_event().build();
     let proxy = event_loop.create_proxy();
     let icon = Icon::from_rgba(include_bytes!("../assets/icon64.rgba").to_vec(), 64, 64).ok();
+    // Come back where the user left the window, if that spot is still on a monitor.
+    let saved_win: Option<WinState> = if private {
+        None
+    } else {
+        let w: WinState = store::load_json("window.json");
+        let mons: Vec<(i32, i32, u32, u32)> = event_loop
+            .available_monitors()
+            .map(|m| (m.position().x, m.position().y, m.size().width, m.size().height))
+            .collect();
+        w.fits(&mons).then_some(w)
+    };
     let window = WindowBuilder::new()
         .with_title(if private { "Wisp (Private)" } else { "Wisp" })
         .with_window_icon(icon)
@@ -2916,6 +3052,9 @@ fn main() {
         window.with_no_redirection_bitmap(true)
     };
     let window = window.build(&event_loop).expect("window");
+    if let Some(w) = saved_win {
+        set_normal_frame(&window, (w.x, w.y, w.w, w.h));
+    }
 
     // No settings file yet means a brand-new install: show the first-run setup, starting from Classic.
     let first_run = !private && !store::data_dir().join("settings.json").exists();
@@ -3068,6 +3207,8 @@ fn main() {
         focused: true,
         release_due: false,
         last_release: Instant::now(),
+        restore: saved_win,
+        pre_fs: None,
         holes: vec![],
         elem_fs: None,
         pending: HashMap::new(),
@@ -3146,6 +3287,7 @@ fn main() {
                 event: WindowEvent::CloseRequested,
                 ..
             } => {
+                app.save_window();
                 store::flush();
                 store::cleanup_private();
                 *flow = ControlFlow::Exit
@@ -3158,6 +3300,23 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn window_state_only_restores_on_screen() {
+        let mons = [(0, 0, 1920, 1080), (1920, 0, 2560, 1440)];
+        let ok = WinState {
+            x: 100,
+            y: 80,
+            w: 1200,
+            h: 800,
+            ..Default::default()
+        };
+        assert!(ok.fits(&mons));
+        assert!(WinState { x: 2500, ..ok }.fits(&mons), "on the second monitor");
+        assert!(!WinState { x: 5000, ..ok }.fits(&mons), "monitor unplugged");
+        assert!(!WinState { y: -500, ..ok }.fits(&mons), "title bar above every screen");
+        assert!(!WinState { w: 0, h: 0, ..ok }.fits(&mons), "nothing saved yet");
+    }
 
     #[test]
     fn layout_content_rects() {

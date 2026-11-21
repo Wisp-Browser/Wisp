@@ -292,6 +292,25 @@ $('#bml').addEventListener('click',e=>{const b=e.target.closest('[data-u]');if(!
 $('#bml').addEventListener('auxclick',e=>{const b=e.target.closest('[data-u]');if(b&&e.button===1){e.preventDefault();send({t:'open',url:b.dataset.u})}});
 $('#bml').addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){$('#bml').scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
 $('#bmall').onclick=()=>window.M5&&M5.lib&&M5.lib('bookmarks');
+// Right-click a bookmark: open in a new tab, edit its name and address, or delete it.
+$('#bml').addEventListener('contextmenu',e=>{const b=e.target.closest('[data-u]');if(!b)return;e.preventDefault();
+ const bm=(S.bms||[]).find(x=>x.url===b.dataset.u);if(bm)bmCtx(bm,e.clientX,e.clientY)});
+function bmCtx(bm,x,y){const m=$('#ctx');m.innerHTML='';closeMenu('#spm');
+ item(m,'tab','Open in new tab',()=>send({t:'open',url:bm.url}));
+ item(m,'copy','Copy address',()=>{try{navigator.clipboard.writeText(bm.url)}catch(_){}});
+ const ed=item(m,'edit','Edit…',()=>{});ed.onclick=ev=>{ev.stopPropagation();bmEdit(bm,m)};
+ m.insertAdjacentHTML('beforeend','<div class="msep"></div>');
+ item(m,'trash','Delete',()=>send({t:'bm_del',url:bm.url,q:''}),'danger');
+ at(m,x,y)}
+function bmEdit(bm,m){const r=m.getBoundingClientRect();
+ m.innerHTML=`<div class="mh4">Edit bookmark</div><form class="bmf"><label>Name<input id="bme_t" type="text" spellcheck="false"></label>
+  <label>Address<input id="bme_u" type="text" spellcheck="false"></label><div class="bmb"><button type="button" class="pbtn" id="bme_x">Cancel</button><button class="pbtn go">Save</button></div></form>`;
+ $('#bme_t').value=bm.title||'';$('#bme_u').value=bm.url;
+ const done=()=>closeMenu('#ctx');$('#bme_x').onclick=done;
+ m.querySelector('form').onsubmit=ev=>{ev.preventDefault();const t=$('#bme_t').value.trim(),u=$('#bme_u').value.trim();
+  if(u)send({t:'bm_edit',url:bm.url,nurl:u,title:t});done()};
+ m.querySelector('form').onkeydown=ev=>{if(ev.key==='Escape'){ev.stopPropagation();done()}};
+ at(m,r.left,r.top);const i=$('#bme_t');i.focus();i.select()}
 function render(){
   applyChrome();applyFont(S.font);
   const r=document.documentElement.style;

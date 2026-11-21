@@ -120,6 +120,29 @@ impl Library {
         now_marked
     }
 
+    /// Rename a bookmark and/or change its address. Returns false if `url` isn't bookmarked or the
+    /// new address isn't a web page.
+    pub fn edit_bookmark(&mut self, url: &str, new_url: &str, title: &str) -> bool {
+        if !trackable(new_url) {
+            return false;
+        }
+        // Changing the address onto another bookmark's: keep just this one.
+        if new_url != url {
+            self.bookmarks.retain(|b| b.url != new_url);
+        }
+        let Some(b) = self.bookmarks.iter_mut().find(|b| b.url == url) else {
+            return false;
+        };
+        b.url = new_url.to_string();
+        b.title = if title.trim().is_empty() {
+            new_url.to_string()
+        } else {
+            title.trim().to_string()
+        };
+        self.save_bookmarks();
+        true
+    }
+
     pub fn import(&mut self, items: Vec<Bookmark>) -> usize {
         let mut added = 0;
         for b in items {

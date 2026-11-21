@@ -11,6 +11,14 @@ body.private #tint{background:color-mix(in srgb,#7c4dff 14%,var(--frame))}
 #sugg,#pop,#ctx,#spm,#findbar{position:fixed;display:none;z-index:8;border-radius:var(--r-lg);padding:6px;transform-origin:top center}
 #sugg.open,#pop.open,#ctx.open,#spm.open{display:block;animation:menuin var(--dur) var(--ease) both}
 #ctx,#spm{min-width:210px;max-width:280px;transform-origin:top left}
+#ctx:has(.bmf){width:300px;max-width:300px}
+.bmf{display:flex;flex-direction:column;gap:8px;padding:2px 6px 6px}
+.bmf label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--fg2)}
+.bmf input{height:32px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--raised);color:var(--fg);font-size:13px;padding:0 10px;outline:0;user-select:text}
+.bmf input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.bmb{display:flex;justify-content:flex-end;gap:6px;margin-top:2px}
+#ctx .bmb .pbtn{width:auto;flex:none;height:32px;padding:0 16px;border-radius:var(--pill);border:1px solid var(--line-2);background:var(--raised);justify-content:center}
+#ctx .bmb .pbtn.go{background:var(--accent);border-color:transparent;color:var(--accent-fg)}
 #pop{min-width:240px;max-width:300px;transform-origin:top right}
 #pop h4,.mh4{margin:4px 10px 6px;font-size:12px;font-weight:600;color:var(--fg2)}
 #pop h4{font-size:13px;color:var(--fg)}
