@@ -5,14 +5,23 @@
 <h1 align="center">Wisp</h1>
 
 <p align="center">
-  A light, glassy browser for Windows. Built in Rust on the system web engine (WebView2), so there is
-  no bundled Chromium and no Electron.
+  A light, glassy browser for Windows and iPhone. Built in Rust on the system web engine (WebView2 on
+  Windows, WebKit on iOS), so there is no bundled Chromium and no Electron.
 </p>
 
 <p align="center">
-  <!-- Replace these with real screenshots: docs/screenshots/*.png -->
-  <img src="docs/screenshots/new-tab.png" width="45%" alt="New tab page (screenshot placeholder)">
-  <img src="docs/screenshots/split-and-ai.png" width="45%" alt="Split screen and AI sidebar (screenshot placeholder)">
+  <a href="https://jakedev2.github.io/Wisp/"><b>Website</b></a> ·
+  <a href="https://github.com/jakedev2/Wisp/releases/latest"><b>Download</b></a> ·
+  <a href="https://jakedev2.github.io/Wisp/privacy.html">Privacy</a>
+</p>
+
+<p align="center">
+  <img src="site/img/desktop-newtab.jpg" width="49%" alt="Wisp on Windows: the New Tab page with the bookmarks bar">
+  <img src="site/img/desktop-ai.jpg" width="49%" alt="Wisp on Windows: the Wisp AI panel beside the New Tab page">
+</p>
+<p align="center">
+  <img src="site/img/desktop-setup.jpg" width="49%" alt="Wisp's first-run setup: choosing a font">
+  <img src="site/img/iphone-newtab.jpg" width="22%" alt="Wisp on iPhone: New Tab page with the floating glass bar">
 </p>
 
 ## Features
