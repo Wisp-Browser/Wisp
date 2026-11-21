@@ -42,6 +42,26 @@ pub fn now() -> u64 {
 pub struct Library {
     pub bookmarks: Vec<Bookmark>,
     pub history: Vec<Visit>,
+    /// Bookmark folders, in the order they show on the bookmarks bar (folders can be empty).
+    pub folders: Vec<String>,
+}
+
+/// The folder a bookmark shows under on the bookmarks bar: its folder path without the browser's
+/// own top-level bar folder ("Bookmarks bar / Dev" → "Dev"). "" is the bar itself.
+pub fn bar_folder(folder: &str) -> String {
+    const BAR: [&str; 6] = [
+        "bookmarks bar",
+        "bookmarks toolbar",
+        "favorites bar",
+        "favourites bar",
+        "toolbar",
+        "bookmarks menu",
+    ];
+    let parts: Vec<&str> = folder.split(" / ").map(str::trim).filter(|p| !p.is_empty()).collect();
+    match parts.split_first() {
+        Some((first, rest)) if BAR.contains(&first.to_lowercase().as_str()) => rest.join(" / "),
+        _ => parts.join(" / "),
+    }
 }
 
 const HISTORY_CAP: usize = 5000;
@@ -52,10 +72,90 @@ fn trackable(url: &str) -> bool {
 
 impl Library {
     pub fn load() -> Library {
-        Library {
+        let mut lib = Library {
             bookmarks: store::load_json("bookmarks.json"),
             history: store::load_json("history.json"),
+            folders: store::load_json("bookmark_folders.json"),
+        };
+        lib.sync_folders();
+        lib
+    }
+
+    /// Every folder that has bookmarks is in `folders` (imported ones included), once.
+    pub fn sync_folders(&mut self) {
+        let mut seen: Vec<String> = vec![];
+        for f in self
+            .folders
+            .iter()
+            .map(|f| bar_folder(f))
+            .chain(self.bookmarks.iter().map(|b| bar_folder(&b.folder)))
+        {
+            if !f.is_empty() && !seen.contains(&f) {
+                seen.push(f);
+            }
         }
+        self.folders = seen;
+    }
+
+    pub fn save_folders(&self) {
+        store::save_json("bookmark_folders.json", &self.folders);
+    }
+
+    /// Create a folder (a no-op if it exists). Returns its name.
+    pub fn new_folder(&mut self, name: &str) -> Option<String> {
+        let name = name.trim().replace('/', "-");
+        if name.is_empty() {
+            return None;
+        }
+        if !self.folders.contains(&name) {
+            self.folders.push(name.clone());
+            self.save_folders();
+        }
+        Some(name)
+    }
+
+    /// Put a bookmark in a folder ("" = straight on the bar).
+    pub fn move_bookmark(&mut self, url: &str, folder: &str) -> bool {
+        let Some(b) = self.bookmarks.iter_mut().find(|b| b.url == url) else {
+            return false;
+        };
+        b.folder = folder.to_string();
+        self.save_bookmarks();
+        true
+    }
+
+    pub fn rename_folder(&mut self, from: &str, to: &str) -> bool {
+        let to = to.trim().replace('/', "-");
+        if to.is_empty() || from == to {
+            return false;
+        }
+        for b in self.bookmarks.iter_mut().filter(|b| bar_folder(&b.folder) == from) {
+            b.folder = to.clone();
+        }
+        for f in self.folders.iter_mut().filter(|f| f.as_str() == from) {
+            *f = to.clone();
+        }
+        self.sync_folders();
+        self.save_bookmarks();
+        self.save_folders();
+        true
+    }
+
+    /// Remove a folder. Its bookmarks are kept and move onto the bar.
+    pub fn delete_folder(&mut self, name: &str) -> usize {
+        let mut n = 0;
+        for b in self.bookmarks.iter_mut().filter(|b| bar_folder(&b.folder) == name) {
+            b.folder.clear();
+            n += 1;
+        }
+        self.folders.retain(|f| f != name);
+        self.save_bookmarks();
+        self.save_folders();
+        n
+    }
+
+    pub fn in_folder(&self, name: &str) -> Vec<&Bookmark> {
+        self.bookmarks.iter().filter(|b| bar_folder(&b.folder) == name).collect()
     }
     pub fn save_bookmarks(&self) {
         store::save_json("bookmarks.json", &self.bookmarks);
@@ -190,7 +290,9 @@ impl Library {
             }
         }
         if added > 0 {
+            self.sync_folders();
             self.save_bookmarks();
+            self.save_folders();
         }
         added
     }
@@ -517,6 +619,19 @@ pub fn import_from(id: &str, path: &Path) -> Result<Vec<Bookmark>, String> {
         "firefox" => read_firefox(path),
         "html" => Ok(parse_netscape(&std::fs::read_to_string(path).map_err(|e| e.to_string())?)),
         _ => Ok(parse_chrome_json(&std::fs::read_to_string(path).map_err(|e| e.to_string())?)),
+    }
+}
+
+#[cfg(test)]
+mod folder_tests {
+    use super::*;
+    #[test]
+    fn bar_folders() {
+        assert_eq!(bar_folder("Bookmarks bar / Dev"), "Dev");
+        assert_eq!(bar_folder("Bookmarks bar"), "");
+        assert_eq!(bar_folder(""), "");
+        assert_eq!(bar_folder("Other bookmarks / X"), "Other bookmarks / X");
+        assert_eq!(bar_folder("Work"), "Work");
     }
 }
 

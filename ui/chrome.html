@@ -44,6 +44,15 @@ body.hasbm #bmbar{display:flex}
 .bmc .f{width:14px;height:14px;border-radius:3px;flex:none;display:grid;place-items:center;font-size:9px;font-weight:700;overflow:hidden;color:var(--fg2)}
 .bmc .f img{width:14px;height:14px}
 .bmc span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bmc.fold .f{color:var(--accent)}.bmc.fold .f .i{width:15px;height:15px}
+.bmc.fold.open{background:var(--press);color:var(--fg)}
+.bmc.drop{background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent);color:var(--fg)}
+#ctx .fhead{display:flex;align-items:center;gap:8px;margin:4px 10px 6px;font-size:12px;font-weight:600;color:var(--fg2)}
+#ctx .fhead .i{width:14px;height:14px;color:var(--accent)}
+#ctx .fitems{max-height:min(60vh,420px);overflow-y:auto}
+#ctx .fitems button .f{width:16px;height:16px;border-radius:4px;flex:none;display:grid;place-items:center;font-size:9px;font-weight:700;overflow:hidden;color:var(--fg2)}
+#ctx .fitems button .f img{width:16px;height:16px}
+#ctx .none{padding:6px 12px 8px;color:var(--fg2);font-size:12.5px}
 #bmall{flex:none}
 body.lay-compact #row1,body.lay-vertical #row1{gap:4px}
 .drag{flex:1 1 0;min-width:28px;align-self:stretch}
@@ -85,6 +94,9 @@ body.lay-vertical #omni{max-width:880px}
 #tabs{display:flex;min-width:0;position:relative}
 /* tabs use size containment (for the narrow-tab query), so the strip is sized from the tab count */
 body:not(.lay-vertical) #tabs{flex:0 1 calc(var(--n,1) * 202px + var(--np,0) * 42px + 4px);transition:flex-basis var(--dur) var(--ease);align-items:center;gap:2px;height:100%;overflow-x:auto;overflow-y:hidden;padding:0 2px;scrollbar-width:none}
+/* Only a shrinking strip glides (a closed tab collapsing); a growing one makes room at once, or the
+   other tabs would be squeezed while it catches up. */
+body:not(.lay-vertical) #tabs.grow{transition:none}
 body:not(.lay-vertical) #tabs::-webkit-scrollbar{display:none}
 .tab{position:relative;display:flex;align-items:center;gap:8px;height:32px;padding:0 4px 0 10px;border-radius:10px;color:var(--fg2);flex:0 1 200px;min-width:40px;container-type:inline-size;transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
 .tab:hover{background:var(--hover);color:var(--fg)}
@@ -115,8 +127,23 @@ body.lay-vertical .tab.closing{animation-name:taboutv}
 .tb .i{width:13px;height:13px}
 .tab:hover .tb,.tab.active .cl{opacity:1}.tb:hover{background:var(--press);color:var(--fg)}
 .tb.pn.on{opacity:1;color:var(--fg)}
-@container (max-width:92px){.tt{display:none}.tab:not(.active) .cl{display:none}}
-@container (max-width:60px){.cl,.pn,.badge{display:none!important}}
+/* Inactive tabs lend the close button's space to the title until they're hovered. */
+.cl{transition:opacity var(--dur) var(--ease),background-color var(--dur) var(--ease),width var(--dur) var(--ease),margin var(--dur) var(--ease)}
+body:not(.lay-vertical) .tab:not(.active):not(:hover):not(.pinned) .cl{width:0;margin-left:-8px}
+/* Narrow tabs: the title is cut short ("Git…") and only goes once there's no room for it at all.
+   (Sizes are the tab's content box: its width minus 14px of padding.) */
+@container (max-width:78px){.tab.active .tt{display:none}}
+@container (max-width:46px){.tab:not(.pinned) .tt,.tab:not(.pinned) .badge{display:none}}
+/* Very narrow: just the site icon, centred. The close button takes its place on hover and on the
+   active tab, so a tab can always be closed. */
+@container (max-width:46px){
+ body:not(.lay-vertical) .tab:not(.pinned) .ic{margin:0 auto;transform:translateX(-3px)}
+ .tab:not(.pinned) .ic{transition:opacity var(--dur) var(--ease)}
+ .tab:not(.pinned) .pn{display:none}
+ .tab:not(.pinned) .cl{position:absolute;left:50%;top:50%;width:22px;margin:-11px 0 0 -11px;opacity:0}
+ .tab:not(.pinned):hover .ic,.tab.active:not(.pinned) .ic{opacity:0}
+ .tab:not(.pinned):hover .cl,.tab.active:not(.pinned) .cl{opacity:1}
+}
 #newh .i{width:17px;height:17px}
 
 /* vertical sidebar */
@@ -272,6 +299,8 @@ function syncTabs(){const sc=$('#tabs'),pins=S.tabs.filter(t=>t.pinned),rest=S.t
    const live=()=>[...sc.children].filter(c=>!c.classList.contains('closing'));
    want.forEach((el,i)=>{const k=live();if(k[i]!==el)sc.insertBefore(el,k[i]||null)});
    live().slice(want.length).forEach(c=>c.remove());
+   const wasN=+sc.style.getPropertyValue('--n')||0,wasP=+sc.style.getPropertyValue('--np')||0;
+   sc.classList.toggle('grow',rest.length>wasN||pins.length>wasP);
    sc.style.setProperty('--n',rest.length);sc.style.setProperty('--np',pins.length);
    if(anim){const moved=[];before.forEach((r,id)=>{const el=tabEls.get(id);if(!el||!el.isConnected)return;const n=el.getBoundingClientRect(),dx=r.left-n.left,dy=r.top-n.top;
      if(Math.abs(dx)>.5||Math.abs(dy)>.5){el.style.transition='none';el.style.transform=`translate(${dx}px,${dy}px)`;moved.push(el)}});
@@ -294,21 +323,65 @@ const FONT_IDS=['inter','rounded','system','serif','mono'];
 function applyFont(f){const b=document.body.classList;FONT_IDS.forEach(k=>b.toggle('f-'+k,k===(f||'inter')))}
 // Bookmarks bar: click opens in this tab, middle- or Ctrl-click in a new tab.
 let bmSig='',urlTab=0,lastTabChange=0;const bmEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function renderBm(){const on=!!S.bmbar&&(S.bms||[]).length>0;document.body.classList.toggle('hasbm',on);
- const sig=on?JSON.stringify(S.bms):'';if(sig===bmSig)return;bmSig=sig;
- $('#bml').innerHTML=on?S.bms.map(b=>`<button class="bmc" data-u="${bmEsc(b.url)}" title="${bmEsc(b.title)}\n${bmEsc(b.url)}"><i class="f">${ic(b)}</i><span>${bmEsc(b.title||b.url)}</span></button>`).join(''):'';
+function renderBm(){const fs=S.bmf||[],on=!!S.bmbar&&((S.bms||[]).length>0||fs.length>0);document.body.classList.toggle('hasbm',on);
+ const sig=on?JSON.stringify([S.bms,fs]):'';if(sig===bmSig)return;bmSig=sig;
+ // Folders first, then the bookmarks that sit straight on the bar.
+ $('#bml').innerHTML=on?fs.map(f=>`<button class="bmc fold" data-fold="${bmEsc(f.name)}" title="${bmEsc(f.name)} · ${f.items.length} bookmark${f.items.length===1?'':'s'}"><i class="f">${ico('folder')}</i><span>${bmEsc(f.name)}</span></button>`).join('')
+  +S.bms.map(b=>`<button class="bmc" draggable="true" data-u="${bmEsc(b.url)}" title="${bmEsc(b.title)}\n${bmEsc(b.url)}"><i class="f">${ic(b)}</i><span>${bmEsc(b.title||b.url)}</span></button>`).join(''):'';
  $('#bmall').innerHTML=ico('bookmark')+'<span>All bookmarks</span>'}
-$('#bml').addEventListener('click',e=>{const b=e.target.closest('[data-u]');if(!b)return;send(e.ctrlKey||e.metaKey?{t:'open',url:b.dataset.u}:{t:'go',input:b.dataset.u})});
+$('#bml').addEventListener('click',e=>{const fo=e.target.closest('[data-fold]');if(fo){e.stopPropagation();folderMenu(fo);return}
+ const b=e.target.closest('[data-u]');if(!b)return;send(e.ctrlKey||e.metaKey?{t:'open',url:b.dataset.u}:{t:'go',input:b.dataset.u})});
+// ---- bookmark folders ----
+const allBm=()=>[...(S.bms||[]),...(S.bmf||[]).flatMap(f=>f.items)];
+function folderMenu(btn){const name=btn.dataset.fold,f=(S.bmf||[]).find(x=>x.name===name);if(!f)return;const m=$('#ctx');
+ if(m.classList.contains('open')&&m.dataset.fold===name){closeMenu('#ctx');return}
+ closeMenu('#spm');m.innerHTML=`<div class="fhead">${ico('folder')}<span></span></div><div class="fitems"></div>`;m.querySelector('.fhead span').textContent=name;m.dataset.fold=name;
+ const list=m.querySelector('.fitems');
+ if(!f.items.length)list.innerHTML='<div class="none">This folder is empty. Drag a bookmark here, or right-click one and choose Move to folder.</div>';
+ f.items.forEach(b=>{const x=document.createElement('button');x.innerHTML=`<i class="f">${ic(b)}</i><span></span>`;x.lastChild.textContent=b.title||b.url;x.title=b.url;
+  x.onclick=ev=>{closeMenu('#ctx');send(ev.ctrlKey||ev.metaKey?{t:'open',url:b.url}:{t:'go',input:b.url})};
+  x.onauxclick=ev=>{if(ev.button===1){ev.preventDefault();send({t:'open',url:b.url})}};
+  x.oncontextmenu=ev=>{ev.preventDefault();ev.stopPropagation();bmCtx(b,ev.clientX,ev.clientY)};list.appendChild(x)});
+ if(f.items.length>1){m.insertAdjacentHTML('beforeend','<div class="msep"></div>');item(m,'tab','Open all ('+f.items.length+')',()=>send({t:'bm_open_all',name}))}
+ btn.classList.add('open');const r=btn.getBoundingClientRect();at(m,r.left,r.bottom+4);
+ const off=()=>{if(!m.classList.contains('open')||m.dataset.fold!==name){btn.classList.remove('open');return}requestAnimationFrame(off)};requestAnimationFrame(off)}
+function folderCtx(name,x,y){const m=$('#ctx');m.innerHTML='';m.dataset.fold='';closeMenu('#spm');const f=(S.bmf||[]).find(z=>z.name===name);
+ if(f&&f.items.length)item(m,'tab','Open all ('+f.items.length+')',()=>send({t:'bm_open_all',name}));
+ const rn=item(m,'edit','Rename…',()=>{});rn.onclick=ev=>{ev.stopPropagation();askName(m,'Rename folder',name,v=>send({t:'bm_folder_rename',from:name,to:v}))};
+ const nf=item(m,'folder','New folder…',()=>{});nf.onclick=ev=>{ev.stopPropagation();askName(m,'New folder','',v=>send({t:'bm_folder_new',name:v}))};
+ m.insertAdjacentHTML('beforeend','<div class="msep"></div>');
+ item(m,'trash','Delete folder',()=>send({t:'bm_folder_del',name}),'danger');at(m,x,y)}
+// A small name form inside the open menu (new folder, rename).
+function askName(m,title,val,done){const r=m.getBoundingClientRect();m.dataset.fold='';
+ m.innerHTML=`<div class="mh4"></div><form class="bmf"><label>Name<input id="fnm" type="text" spellcheck="false" maxlength="60"></label><div class="bmb"><button type="button" class="pbtn" id="fnx">Cancel</button><button class="pbtn go">Save</button></div></form>`;
+ m.querySelector('.mh4').textContent=title;const i=$('#fnm');i.value=val||'';
+ $('#fnx').onclick=()=>closeMenu('#ctx');m.querySelector('form').onsubmit=ev=>{ev.preventDefault();const v=i.value.trim();if(v)done(v);closeMenu('#ctx')};
+ m.querySelector('form').onkeydown=ev=>{if(ev.key==='Escape'){ev.stopPropagation();closeMenu('#ctx')}};at(m,r.left,r.top);i.focus();i.select()}
+function moveMenu(bm,m){const r=m.getBoundingClientRect();m.innerHTML='<div class="mh4">Move to folder</div>';m.dataset.fold='';
+ const cur=(S.bmf||[]).find(f=>f.items.some(b=>b.url===bm.url));
+ if(cur)item(m,'bookmark','Bookmarks bar',()=>send({t:'bm_move',url:bm.url,folder:''}));
+ (S.bmf||[]).filter(f=>f!==cur).forEach(f=>item(m,'folder',f.name,()=>send({t:'bm_move',url:bm.url,folder:f.name})));
+ m.insertAdjacentHTML('beforeend','<div class="msep"></div>');
+ const nf=item(m,'plus','New folder…',()=>{});nf.onclick=ev=>{ev.stopPropagation();askName(m,'New folder','',v=>send({t:'bm_folder_new',name:v,url:bm.url}))};
+ at(m,r.left,r.top)}
+// Drag a bookmark onto a folder to move it there.
+$('#bml').addEventListener('dragstart',e=>{const b=e.target.closest('[data-u]');if(!b)return;e.dataTransfer.setData('text/x-wisp-bm',b.dataset.u);e.dataTransfer.effectAllowed='move'});
+$('#bml').addEventListener('dragover',e=>{const f=e.target.closest('[data-fold]');if(f&&e.dataTransfer.types.includes('text/x-wisp-bm')){e.preventDefault();f.classList.add('drop')}});
+$('#bml').addEventListener('dragleave',e=>{const f=e.target.closest('[data-fold]');if(f)f.classList.remove('drop')});
+$('#bml').addEventListener('drop',e=>{const f=e.target.closest('[data-fold]'),u=e.dataTransfer.getData('text/x-wisp-bm');if(f){f.classList.remove('drop');if(u){e.preventDefault();send({t:'bm_move',url:u,folder:f.dataset.fold})}}});
 $('#bml').addEventListener('auxclick',e=>{const b=e.target.closest('[data-u]');if(b&&e.button===1){e.preventDefault();send({t:'open',url:b.dataset.u})}});
 $('#bml').addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){$('#bml').scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
 $('#bmall').onclick=()=>window.M5&&M5.lib&&M5.lib('bookmarks');
 // Right-click a bookmark: open in a new tab, edit its name and address, or delete it.
-$('#bml').addEventListener('contextmenu',e=>{const b=e.target.closest('[data-u]');if(!b)return;e.preventDefault();
- const bm=(S.bms||[]).find(x=>x.url===b.dataset.u);if(bm)bmCtx(bm,e.clientX,e.clientY)});
-function bmCtx(bm,x,y){const m=$('#ctx');m.innerHTML='';closeMenu('#spm');
+$('#bml').addEventListener('contextmenu',e=>{e.preventDefault();const fo=e.target.closest('[data-fold]');if(fo){folderCtx(fo.dataset.fold,e.clientX,e.clientY);return}
+ const b=e.target.closest('[data-u]');
+ if(!b){const m=$('#ctx');m.innerHTML='';m.dataset.fold='';closeMenu('#spm');const nf=item(m,'folder','New folder…',()=>{});nf.onclick=ev=>{ev.stopPropagation();askName(m,'New folder','',v=>send({t:'bm_folder_new',name:v}))};at(m,e.clientX,e.clientY);return}
+ const bm=allBm().find(x=>x.url===b.dataset.u);if(bm)bmCtx(bm,e.clientX,e.clientY)});
+function bmCtx(bm,x,y){const m=$('#ctx');m.innerHTML='';m.dataset.fold='';closeMenu('#spm');
  item(m,'tab','Open in new tab',()=>send({t:'open',url:bm.url}));
  item(m,'copy','Copy address',()=>{try{navigator.clipboard.writeText(bm.url)}catch(_){}});
  const ed=item(m,'edit','Edit…',()=>{});ed.onclick=ev=>{ev.stopPropagation();bmEdit(bm,m)};
+ const mv=item(m,'folder','Move to folder…',()=>{});mv.onclick=ev=>{ev.stopPropagation();moveMenu(bm,m)};
  m.insertAdjacentHTML('beforeend','<div class="msep"></div>');
  item(m,'trash','Delete',()=>send({t:'bm_del',url:bm.url,q:''}),'danger');
  at(m,x,y)}

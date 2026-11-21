@@ -6,6 +6,29 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- A Christmas theme (Customize → Appearance → Holiday): falling snow (with an amount slider), twinkling
+  fairy lights across the top of the New Tab page, snow drifts, snow on the search bar and cards, and
+  a countdown to Christmas under the clock. It gives the space a festive wallpaper and red accent, and
+  turning it off brings back the previous ones. Every part can be switched off on its own.
+- Bookmark folders. Folders show on the bookmarks bar and open as a menu, with "Open all". Make one
+  from the bar's right-click menu or All bookmarks, move bookmarks in with "Move to folder" or by
+  dragging them onto it, and rename or delete it (its bookmarks move back to the bar). Folders
+  imported from other browsers show up too.
+
+### Changed
+- Sliders in Customize have a new look: a slim track that fills with the accent colour, a soft white
+  knob, and the value in a pill.
+- Narrow tabs keep a shortened title ("Git…") instead of dropping it, and can always be closed: a
+  very narrow tab swaps its icon for the close button on hover, and the active tab always shows it.
+
+### Fixed
+- Opening a new tab no longer squeezes the other tabs for a moment.
+- Beta channel: a newer beta (say beta.2 when you have beta.1) is now found and installed. Versions
+  were compared only up to the first word, so every beta of a version looked the same, and a final
+  release didn't count as newer than its betas either. The beta channel also picks the highest version
+  among recent releases.
+
 ## [0.5.0] - 2026-11-21
 
 ### Added

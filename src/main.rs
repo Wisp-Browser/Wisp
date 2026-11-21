@@ -1818,7 +1818,9 @@ impl App {
             "accent":self.settings.accent,"glass":self.settings.glass,"perf":self.settings.perf,"nt":s.nt,
             "layout":self.settings.layout,"glass_on":self.settings.glass_on,"glass_ok":self.glass_ok,
             "collapsed":self.settings.side_collapsed,"setup":self.settings.setup,"font":self.settings.font,
-            "bmbar":self.settings.bmbar,"bms":self.lib.bookmarks.iter().take(80).map(|b| json!({"url":b.url,"title":b.title})).collect::<Vec<_>>(),
+            "bmbar":self.settings.bmbar,
+            "bms":self.lib.bookmarks.iter().filter(|b| library::bar_folder(&b.folder).is_empty()).take(80).map(|b| json!({"url":b.url,"title":b.title})).collect::<Vec<_>>(),
+            "bmf":self.lib.folders.iter().map(|f| json!({"name":f,"items":self.lib.in_folder(f).iter().take(200).map(|b| json!({"url":b.url,"title":b.title})).collect::<Vec<_>>()})).collect::<Vec<_>>(),
             "ai":{"open":self.ai_open,"w":self.ai_w,"keys":self.keys,"cfg":self.settings.ai},
             "private":store::is_private(),"version":env!("CARGO_PKG_VERSION"),"fullscreen":self.fullscreen,
             "s":{"suggest":self.settings.suggest,"blocker":self.settings.blocker,"https_only":self.settings.https_only,
@@ -1875,7 +1877,7 @@ impl App {
 
     /// The bookmarks bar is on screen (setting on, and there is something to show).
     fn bmbar_shown(&self) -> bool {
-        self.settings.bmbar && !self.lib.bookmarks.is_empty()
+        self.settings.bmbar && (!self.lib.bookmarks.is_empty() || !self.lib.folders.is_empty())
     }
 
     /// Bookmarks were added or removed: the bar may appear or disappear, which moves the pages.
@@ -2236,6 +2238,55 @@ impl App {
                 self.lib.save_bookmarks();
                 self.lib_query("bookmarks", &s("q"));
                 self.bookmarks_changed();
+            }
+            "bm_folder_new" => {
+                if let Some(name) = self.lib.new_folder(&s("name")) {
+                    let u = s("url");
+                    if !u.is_empty() {
+                        self.lib.move_bookmark(&u, &name);
+                    }
+                    self.toast(&format!("Folder “{name}” created"));
+                    self.lib_query("bookmarks", "");
+                    self.bookmarks_changed();
+                }
+            }
+            "bm_move" => {
+                let f = s("folder");
+                if self.lib.move_bookmark(&s("url"), &f) {
+                    self.toast(&if f.is_empty() {
+                        "Moved to the bookmarks bar".to_string()
+                    } else {
+                        format!("Moved to “{f}”")
+                    });
+                    self.lib_query("bookmarks", "");
+                    self.bookmarks_changed();
+                }
+            }
+            "bm_folder_rename" => {
+                if self.lib.rename_folder(&s("from"), &s("to")) {
+                    self.lib_query("bookmarks", "");
+                    self.bookmarks_changed();
+                }
+            }
+            "bm_folder_del" => {
+                let name = s("name");
+                let n = self.lib.delete_folder(&name);
+                self.toast(&if n > 0 {
+                    format!(
+                        "Folder “{name}” removed. Its {n} bookmark{} moved to the bar.",
+                        if n == 1 { "" } else { "s" }
+                    )
+                } else {
+                    format!("Folder “{name}” removed")
+                });
+                self.lib_query("bookmarks", "");
+                self.bookmarks_changed();
+            }
+            "bm_open_all" => {
+                let urls: Vec<String> = self.lib.in_folder(&s("name")).iter().take(40).map(|b| b.url.clone()).collect();
+                for u in urls {
+                    self.open_tab(&u, false);
+                }
             }
             "hist_del" => {
                 let u = s("url");

@@ -62,15 +62,55 @@ pub enum Startup {
     RolledBack,
 }
 
-/// `true` when `tag` (e.g. "v1.2.3") is a newer version than `cur` ("1.2.0").
+/// Order two versions the semver way: "1.2.3" > "1.2.3-beta.2" > "1.2.3-beta.1" > "1.2.2".
+/// A leading "v" and build metadata ("+...") are ignored.
+pub fn cmp_versions(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    fn split(s: &str) -> (Vec<u64>, Vec<String>) {
+        let s = s.trim().trim_start_matches(['v', 'V']);
+        let s = s.split('+').next().unwrap_or("");
+        let (core, pre) = match s.split_once('-') {
+            Some((c, p)) => (c, p),
+            None => (s, ""),
+        };
+        let mut nums: Vec<u64> = core.split('.').map(|p| p.trim().parse().unwrap_or(0)).collect();
+        nums.resize(3.max(nums.len()), 0);
+        let pre = if pre.is_empty() {
+            vec![]
+        } else {
+            pre.split('.').map(String::from).collect()
+        };
+        (nums, pre)
+    }
+    let ((an, ap), (bn, bp)) = (split(a), split(b));
+    match an.cmp(&bn) {
+        Ordering::Equal => {}
+        o => return o,
+    }
+    // No pre-release part means the final release, which comes after its pre-releases.
+    match (ap.is_empty(), bp.is_empty()) {
+        (true, true) => return Ordering::Equal,
+        (true, false) => return Ordering::Greater,
+        (false, true) => return Ordering::Less,
+        _ => {}
+    }
+    for (x, y) in ap.iter().zip(bp.iter()) {
+        let o = match (x.parse::<u64>(), y.parse::<u64>()) {
+            (Ok(i), Ok(j)) => i.cmp(&j),
+            (Ok(_), Err(_)) => Ordering::Less,
+            (Err(_), Ok(_)) => Ordering::Greater,
+            _ => x.to_lowercase().cmp(&y.to_lowercase()),
+        };
+        if o != Ordering::Equal {
+            return o;
+        }
+    }
+    ap.len().cmp(&bp.len())
+}
+
+/// `true` when `tag` (e.g. "v1.2.3" or "0.3.0-beta.2") is a newer version than `cur`.
 pub fn newer(tag: &str, cur: &str) -> bool {
-    let parse = |s: &str| -> Vec<u64> {
-        s.trim_start_matches('v')
-            .split(['.', '-', '+'])
-            .map_while(|p| p.parse().ok())
-            .collect()
-    };
-    parse(tag) > parse(cur)
+    cmp_versions(tag, cur) == std::cmp::Ordering::Greater
 }
 
 pub fn parse_feed(json: &str) -> Result<Release, String> {
@@ -114,9 +154,15 @@ pub fn fetch_latest(owner: &str, repo: &str, beta: bool) -> Result<Release, Stri
         "https://api.github.com/repos/{owner}/{repo}/releases?per_page=10"
     ))?)
     .map_err(|e| e.to_string())?;
+    // The highest version among the recent releases (betas and stable ones), not just the newest
+    // one created.
     let rel = list
         .as_array()
-        .and_then(|a| a.iter().find(|r| r["draft"] != true))
+        .and_then(|a| {
+            a.iter()
+                .filter(|r| r["draft"] != true)
+                .max_by(|x, y| cmp_versions(x["tag_name"].as_str().unwrap_or(""), y["tag_name"].as_str().unwrap_or("")))
+        })
         .ok_or_else(|| "No releases published yet.".to_string())?;
     let url = rel["assets"]
         .as_array()
@@ -351,6 +397,19 @@ mod tests {
         assert!(!newer("v0.1.0", "0.1.0"));
         assert!(!newer("v0.0.9", "0.1.0"));
         assert!(newer("0.1.10", "0.1.9"));
+        // betas
+        assert!(newer("v0.3.0-beta.2", "0.3.0-beta.1"));
+        assert!(newer("0.3.0-beta.10", "0.3.0-beta.9"));
+        assert!(!newer("0.3.0-beta.1", "0.3.0-beta.2"));
+        assert!(!newer("0.3.0-beta.1", "0.3.0-beta.1"));
+        assert!(newer("0.3.0", "0.3.0-beta.5"));
+        assert!(!newer("0.3.0-beta.5", "0.3.0"));
+        assert!(newer("0.3.1-beta.1", "0.3.0"));
+        assert!(newer("0.4.0-beta.1", "0.3.0-beta.9"));
+        assert!(newer("0.3.0-rc.1", "0.3.0-beta.3"));
+        assert!(newer("0.2.10-beta.3", "0.2.10-beta.2"));
+        assert!(!newer("v0.2.9", "0.2.10-beta.1"));
+        assert!(!newer("1.0.0+build.7", "1.0.0"));
     }
 
     #[test]

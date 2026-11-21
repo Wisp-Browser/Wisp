@@ -51,7 +51,7 @@ body.light .clock{color:var(--fg);text-shadow:0 1px 16px rgba(255,255,255,.6)}
 .btn.wide{width:100%;height:38px}.btn.sm{height:30px;padding:0 12px;flex:none}
 .row{display:flex;align-items:center;gap:10px;margin:8px 0}.row label{flex:1;font-size:13px}.row span{width:38px;text-align:right;color:var(--fg2);font-size:12px}
 .row>*{min-width:0}
-input[type=range]{flex:1.6;accent-color:var(--accent)}input[type=color]{width:34px;height:28px;border:0;background:none;padding:0}
+input[type=color]{width:34px;height:28px;border:0;background:none;padding:0}
 select,.in{height:34px;border-radius:10px;border:1px solid var(--line-2);background:var(--raised);padding:0 11px;outline:0;color:var(--fg)}
 .in{width:100%}.in::placeholder{color:var(--fg3)}
 .in:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
@@ -62,8 +62,43 @@ select,.in{height:34px;border-radius:10px;border:1px solid var(--line-2);backgro
 .seg.sm{flex:none}.seg.full button{flex:1}
 .stack{display:flex;flex-direction:column;gap:8px;margin-top:10px}.addrow{display:flex;gap:8px;align-items:center}.addrow .in{flex:1;min-width:0}
 .hint{color:var(--fg2);font-size:12px;display:block;margin-top:4px;line-height:1.4}
+/* ---- sliders: a slim track that fills with the accent colour, and a soft white knob ---- */
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1.6;height:24px;margin:0;background:transparent;--p:50%}
+input[type=range]:focus{outline:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(to right,var(--accent) var(--p),var(--press) var(--p));box-shadow:inset 0 0 0 1px var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-6px;border-radius:50%;background:#fff;border:0;box-shadow:0 1px 3px rgba(0,0,0,.35),0 0 0 .5px rgba(0,0,0,.12);transition:transform var(--dur-s) var(--ease),box-shadow var(--dur) var(--ease)}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.12)}
+input[type=range]:active::-webkit-slider-thumb,input[type=range]:focus-visible::-webkit-slider-thumb{transform:scale(1.04);box-shadow:0 0 0 6px var(--accent-soft),0 1px 3px rgba(0,0,0,.35)}
+.row .val{min-width:44px;width:auto;padding:3px 8px;border-radius:var(--pill);background:var(--raised);color:var(--fg2);font-size:11.5px;text-align:center;font-variant-numeric:tabular-nums}
+/* ---- Christmas ---- */
+.xcard{position:relative;overflow:hidden;border-radius:var(--r-lg);padding:14px 14px 12px;background:radial-gradient(260px 120px at 85% 0%,rgba(224,72,62,.35),transparent 70%),radial-gradient(240px 140px at 0% 100%,rgba(31,138,90,.35),transparent 70%),var(--raised);border:1px solid var(--line-2)}
+.xcard .xh{display:flex;align-items:center;gap:12px}
+.xcard .xi{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(160deg,#1f8a5a,#0f5132);color:#fff;flex:none;box-shadow:0 4px 14px rgba(31,138,90,.35)}
+.xcard .xi .i{width:22px;height:22px}
+.xcard b{display:block;font-size:14px}.xcard small{color:var(--fg2);font-size:12px}
+.xcard .xh>div{flex:1;min-width:0}
+.xopts{margin-top:10px;border-top:1px solid var(--line)}
+.xopts .wrow:last-child{border-bottom:0}
+#lights,#drift{position:fixed;left:0;right:0;pointer-events:none;display:none}
+#lights{top:0;height:64px;z-index:2}
+#drift{bottom:0;height:90px;z-index:1}
+body.xmas #lights.on,body.xmas #drift.on{display:block}
+#lights svg,#drift svg{width:100%;height:100%;display:block}
+.bulb{animation:twinkle 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 0}
+@keyframes twinkle{0%,100%{opacity:1;filter:brightness(1.15) drop-shadow(0 0 6px currentColor)}50%{opacity:.45;filter:brightness(.8) drop-shadow(0 0 1px currentColor)}}
+body.perf .bulb{animation:none}
+@media (prefers-reduced-motion:reduce){.bulb{animation:none}}
+/* a little snow on top of the search bar and the cards */
+body.xmas.caps .search,body.xmas.caps .card{position:relative}
+body.xmas.caps .search::before,body.xmas.caps .card::before{content:'';position:absolute;left:10px;right:10px;top:-9px;height:14px;pointer-events:none;
+ background:radial-gradient(8% 80% at 6% 100%,#fff 95%,transparent 100%),radial-gradient(12% 100% at 22% 100%,#fff 95%,transparent 100%),radial-gradient(9% 75% at 38% 100%,#fff 95%,transparent 100%),radial-gradient(13% 95% at 55% 100%,#fff 95%,transparent 100%),radial-gradient(10% 80% at 72% 100%,#fff 95%,transparent 100%),radial-gradient(12% 100% at 90% 100%,#fff 95%,transparent 100%),linear-gradient(transparent 62%,#fff 62%);
+ border-radius:0 0 7px 7px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.22));opacity:.96}
+body.xmas.caps .search::before{left:28px;right:28px}
+body.xmas.light.caps .search::before,body.xmas.light.caps .card::before{box-shadow:0 1px 3px rgba(40,60,100,.25)}
+.clock .xc{display:block;margin-top:8px;font-size:13px;opacity:.9;letter-spacing:.01em}
+.clock .xc:empty{display:none}
 </style></head><body class="glass">
-<div id="wall"></div><video id="wallv" muted loop playsinline autoplay></video><div id="dim"></div><canvas id="fx"></canvas>
+<div id="wall"></div><video id="wallv" muted loop playsinline autoplay></video><div id="dim"></div><canvas id="fx"></canvas><div id="drift"></div><div id="lights"></div>
 <div id="widgets"></div>
 <div id="gear" class="panel" role="button" tabindex="0"></div>
 <div id="drawer" class="glass-m"></div>
@@ -83,7 +118,10 @@ const ACC=['#5e5ce6','#ff6b5e','#ff9f43','#f7d154','#4cd98f','#3fc8e8','#6c8cff'
 const DEF=()=>({wall:{kind:'gradient',css:NEBULA},blur:0,dim:8,effect:'stars',speed:1,
  widgets:{clock:{on:true,x:50,y:24},search:{on:true,x:50,y:44},dial:{on:true,x:50,y:66},weather:{on:false,x:86,y:18},notes:{on:false,x:14,y:62},recent:{on:false,x:86,y:62}},
  dial:[{n:'YouTube',u:'https://www.youtube.com'},{n:'GitHub',u:'https://github.com'},{n:'Reddit',u:'https://www.reddit.com'},{n:'Wikipedia',u:'https://wikipedia.org'},{n:'Maps',u:'https://maps.google.com'}],
- weather:{city:'',unit:/US/.test(navigator.language)?'F':'C'},notes:''});
+ weather:{city:'',unit:/US/.test(navigator.language)?'F':'C'},notes:'',
+ xmas:{on:false,snow:true,amount:1,lights:true,drift:true,caps:true,count:true}});
+const XMAS_WALL='radial-gradient(900px 420px at 50% 112%,rgba(224,72,62,.28),transparent 70%),radial-gradient(700px 420px at 12% 8%,rgba(31,138,90,.32),transparent 70%),radial-gradient(500px 300px at 88% 18%,rgba(255,214,140,.14),transparent 70%),linear-gradient(180deg,#06101f,#0a2128 58%,#0f3326)';
+const XMAS_RED='#e0483e',BULBS=['#ff4d4d','#ffd34d','#3ddc84','#4db8ff','#ff8bd8'];
 let grad={a:'#2b0f2e',b:'#ff6b5e',deg:160},cfg=DEF(),theme={accent:'#5e5ce6',glass:.5,light:false},recent=[],space={name:'',color:''},timer=0,edit=false;
 const merge=(a,b)=>{for(const k in b){a[k]=(b[k]&&typeof b[k]==='object'&&!Array.isArray(b[k])&&a[k])?merge(a[k],b[k]):b[k]}return a};
 // Wisp hands over this space's look before the page first draws (no flash of the default theme).
@@ -100,10 +138,17 @@ function applyWall(){const w=cfg.wall||{},el=$('#wall'),v=$('#wallv');document.b
 // ---- animated dots (shared logic with the new tab page) ----
 function makeFx(canvas){const cx=canvas.getContext('2d');let P=[],raf=0,frozen=false,last=0,mode='none',speed=1,w=0,h=0,shoot=null,nextShoot=3e3,gap=40,hold=0;
  const R=Math.random;
- function init(){w=canvas.width=innerWidth;h=canvas.height=innerHeight;const n=mode==='particles'?70:110;P=[];
-  for(let i=0;i<n;i++){const z=R();P.push({x:R()*w,y:R()*h,z,r:.5+z*1.7,a:R()*6.28,tw:.6+R()*1.6,d:R()*6.28})}}
+ let amount=1;
+ function init(){w=canvas.width=innerWidth;h=canvas.height=innerHeight;const n=mode==='particles'?70:mode==='snow'?Math.round(150*amount):110;P=[];
+  for(let i=0;i<n;i++){const z=R();P.push({x:R()*w,y:R()*h,z,r:mode==='snow'?.8+z*2.6:.5+z*1.7,a:R()*6.28,tw:.6+R()*1.6,d:R()*6.28})}}
  function loop(t){raf=requestAnimationFrame(loop);if(t-last<gap||t<hold)return;const dt=Math.min((t-last)/1000,.1);last=t;cx.clearRect(0,0,w,h);const ink=document.body.classList.contains('light')?'#3c3570':'#fff';cx.fillStyle=ink;
-  if(mode==='stars'){
+  if(mode==='snow'){
+   // Flakes drift down and sway; nearer (bigger) ones fall faster. A light page gets pale blue snow.
+   cx.fillStyle=document.body.classList.contains('light')?'#9db4d8':'#fff';const t2=t/1000;
+   for(const p of P){p.y+=(18+p.z*42)*speed*dt;p.x+=(Math.sin(t2*.7+p.d)*14*(.4+p.z)+6)*speed*dt;
+    if(p.y>h+6){p.y=-6;p.x=R()*w}if(p.x>w+6)p.x=-6;if(p.x<-6)p.x=w+6;
+    cx.globalAlpha=.35+p.z*.55;cx.beginPath();cx.arc(p.x,p.y,p.r,0,7);cx.fill()}
+  }else if(mode==='stars'){
    for(const p of P){const v=(14+p.z*46)*speed;p.x+=v*dt*.94;p.y+=v*dt*.34;p.a+=p.tw*dt*speed;
     if(p.x>w+6)p.x=-6;if(p.y>h+6)p.y=-6;cx.globalAlpha=.2+.7*Math.abs(Math.sin(p.a))*(.4+p.z*.6);cx.beginPath();cx.arc(p.x,p.y,p.r,0,7);cx.fill()}
    nextShoot-=dt*1000*speed;if(!shoot&&nextShoot<0){shoot={x:R()*w*.8,y:R()*h*.4,l:0};nextShoot=4e3+R()*7e3}
@@ -119,13 +164,36 @@ function makeFx(canvas){const cx=canvas.getContext('2d');let P=[],raf=0,frozen=f
  function start(){if(raf||frozen||document.hidden||mode==='none')return;last=performance.now();raf=requestAnimationFrame(loop)}
  document.addEventListener('visibilitychange',()=>document.hidden?cancelAnimationFrame(raf)||(raf=0):start());
  addEventListener('resize',()=>{if(mode!=='none'){init();if(frozen){const t=performance.now();last=t-gap;loop(t);cancelAnimationFrame(raf);raf=0}}});
- return{pause(ms){hold=performance.now()+ms},set(m,s,fps,still){m=m||'none';s=s||1;gap=1000/(fps||25);const changed=m!==mode;mode=m;speed=s;if(m==='none'){stop();canvas.style.display='none';return}
+ return{pause(ms){hold=performance.now()+ms},set(m,s,fps,still,amt){m=m||'none';s=s||1;gap=1000/(fps||25);const changed=m!==mode||(m==='snow'&&(amt||1)!==amount);amount=amt||1;mode=m;speed=s;if(m==='none'){stop();canvas.style.display='none';return}
    canvas.style.display='block';if(changed||!P.length)init();
    // still: draw one frame and wait (the ready-made page), so the dots are already there when it's opened
    frozen=!!still;if(still){cancelAnimationFrame(raf);raf=0;const t=performance.now();last=t-gap;loop(t);cancelAnimationFrame(raf);raf=0}else start()}}}
 const fxo=makeFx($('#fx'));let SPARE=location.hash==='#spare';
 const RM=matchMedia('(prefers-reduced-motion: reduce)');RM.addEventListener('change',()=>applyFx());
-function applyFx(){fxo.set(theme.perf||RM.matches?'none':cfg.effect,cfg.speed,30,SPARE)}
+const xon=()=>!!(cfg.xmas&&cfg.xmas.on);
+function applyFx(){const snow=xon()&&cfg.xmas.snow;fxo.set(theme.perf||RM.matches?'none':snow?'snow':cfg.effect,snow?1:cfg.speed,30,SPARE,cfg.xmas&&cfg.xmas.amount)}
+// ---- Christmas: fairy lights along the top, snow drifts along the bottom, caps, countdown ----
+function drawLights(){const el=$('#lights');if(!xon()||!cfg.xmas.lights){el.className='';el.innerHTML='';return}
+ const W=innerWidth,span=150,n=Math.ceil(W/span);let wire='',bulbs='',k=0;
+ for(let i=0;i<n;i++){const x0=i*span,x1=x0+span,sag=20+((i*37)%9);wire+=`M${x0},6 Q${x0+span/2},${6+sag*2} ${x1},6 `;
+  for(const f of [.2,.4,.6,.8]){const x=x0+span*f,y=6+sag*2*2*f*(1-f),c=BULBS[k%BULBS.length],d=((k*0.37)%2.4).toFixed(2);k++;
+   bulbs+=`<g class="bulb" style="color:${c};animation-delay:-${d}s"><rect x="${x-2.5}" y="${y-1}" width="5" height="5" rx="1.2" fill="#3a4a3e"/><ellipse cx="${x}" cy="${y+10}" rx="4.6" ry="7" fill="${c}"/><ellipse cx="${x-1.4}" cy="${y+7.5}" rx="1.3" ry="2.2" fill="#fff" opacity=".55"/></g>`}}
+ el.innerHTML=`<svg viewBox="0 0 ${W} 64" preserveAspectRatio="none"><path d="${wire}" fill="none" stroke="#1f2b22" stroke-width="1.6"/>${bulbs}</svg>`;el.className='on'}
+function drawDrift(){const el=$('#drift');if(!xon()||!cfg.xmas.drift){el.className='';el.innerHTML='';return}
+ const W=innerWidth,lt=document.body.classList.contains('light');let d=`M0,90 L0,52 `;for(let x=0;x<=W;x+=W/7){d+=`Q${x+W/14},${30+((x*13)%22)} ${x+W/7},${50+((x*7)%14)} `}d+=`L${W},90 Z`;
+ let d2=`M0,90 L0,70 `;for(let x=0;x<=W;x+=W/5){d2+=`Q${x+W/10},${56+((x*11)%16)} ${x+W/5},${68+((x*5)%10)} `}d2+=`L${W},90 Z`;
+ el.innerHTML=`<svg viewBox="0 0 ${W} 90" preserveAspectRatio="none"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${lt?.95:.85}"/><stop offset="1" stop-color="${lt?'#dbe6f7':'#cfdcf2'}" stop-opacity="${lt?1:.75}"/></linearGradient></defs><path d="${d}" fill="url(#sg)" opacity=".55"/><path d="${d2}" fill="url(#sg)"/></svg>`;el.className='on'}
+function applyXmas(){const b=document.body.classList,on=xon();b.toggle('xmas',on);b.toggle('caps',on&&cfg.xmas.caps);drawLights();drawDrift();tick()}
+addEventListener('resize',()=>{if(xon()){drawLights();drawDrift()}});
+const xmasDays=()=>{const d=new Date(),y=d.getFullYear();let c=new Date(y,11,25);if(d>new Date(y,11,26))c=new Date(y+1,11,25);return Math.ceil((c-new Date(y,d.getMonth(),d.getDate()))/864e5)};
+function xmasLine(){if(!xon()||!cfg.xmas.count)return'';const d=new Date();if(d.getMonth()===11&&d.getDate()===24)return'🎄 Merry Christmas Eve!';if(d.getMonth()===11&&d.getDate()===25)return'🎄 Merry Christmas!';if(d.getMonth()===11&&d.getDate()===26)return'❄ Happy holidays!';const n=xmasDays();return'❄ '+n+(n===1?' day':' days')+' until Christmas'}
+// Turning it on gives this space a festive wallpaper and accent; turning it off puts yours back.
+function setXmas(on){const x=cfg.xmas;if(on===x.on)return;x.on=on;
+ if(on){if(!cfg.wall||cfg.wall.kind==='gradient'||cfg.wall.kind==='solid'){x.prevWall=cfg.wall;cfg.wall={kind:'gradient',css:XMAS_WALL}}x.prevAccent=theme.accent;theme.accent=XMAS_RED}
+ else{if(cfg.wall&&cfg.wall.css===XMAS_WALL&&x.prevWall)cfg.wall=x.prevWall;if(theme.accent===XMAS_RED&&x.prevAccent)theme.accent=x.prevAccent;delete x.prevWall;delete x.prevAccent}
+ applyTheme();applyWall();applyFx();applyXmas();
+ // Save first: the accent change makes Wisp send this page its settings back, and they must be the new ones.
+ save(true);send({t:'theme_set',accent:theme.accent,glass:theme.glass,perf:!!theme.perf})}
 window.wispAwake=()=>{SPARE=false;history.replaceState(null,'',location.pathname);applyFx();tick()};
 // widgets
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -138,7 +206,7 @@ async function weather(el){const w=cfg.weather,c=w.city.trim();const box=el.quer
   const h=`${ico(WX(f.current.weather_code))}<div><b>${Math.round(f.current.temperature_2m)}°${w.unit}</b><small>${esc(p.name)}</small></div>`;wxCache[key]={t:Date.now(),h};box.innerHTML=h}catch(e){box.innerHTML='<small>Weather unavailable</small>'}}
 const greet=()=>{const h=new Date().getHours();return h<5?'Good night':h<12?'Good morning':h<18?'Good afternoon':'Good evening'};
 function build(id){const e=document.createElement('div');e.className='w'+(introAnim?' intro':'');if(introAnim)e.addEventListener('animationend',()=>e.classList.remove('intro'),{once:true});e.dataset.id=id;
- if(id==='clock')e.innerHTML='<div class="clock"><b></b><span></span><small></small></div>';
+ if(id==='clock')e.innerHTML='<div class="clock"><b></b><span></span><small></small><em class="xc"></em></div>';
  if(id==='search'){e.innerHTML='<div class="search panel">'+ico('search')+'<input placeholder="Search the web or type an address" spellcheck="false"></div>';e.querySelector('input').onkeydown=k=>{if(k.key==='Enter')send({t:'go',input:k.target.value})}}
  if(id==='dial'){e.innerHTML='<div class="dial"></div>';const d=e.querySelector('.dial');cfg.dial.forEach(s=>{const a=document.createElement('a');a.className='tile panel';a.href=s.u;let o='';try{o=new URL(s.u).origin}catch(x){}
    a.innerHTML=`<i>${o?`<img src="${o}/favicon.ico" alt="${esc((s.n||'?')[0].toUpperCase())}" onerror="this.parentNode.textContent=this.alt">`:esc((s.n||'?')[0])}</i><span>${esc(s.n)}</span>`;d.appendChild(a)})}
@@ -151,7 +219,7 @@ function pos(e,id){const p=cfg.widgets[id];e.style.left=p.x+'%';e.style.top=p.y+
 let introAnim=!SPARE;
 function renderWidgets(){const c=$('#widgets'),keep=document.activeElement&&document.activeElement.tagName==='TEXTAREA';
  c.innerHTML='';for(const id of Object.keys(cfg.widgets)){if(!cfg.widgets[id].on)continue;if(id==='notes'&&keep&&false)continue;const e=build(id);pos(e,id);c.appendChild(e)}tick();introAnim=false}
-function tick(){const c=document.querySelector('.clock');if(!c)return;const d=new Date();c.children[0].textContent=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});c.children[1].textContent=greet();c.children[2].textContent=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'})}
+function tick(){const c=document.querySelector('.clock');if(!c)return;const d=new Date();c.children[0].textContent=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});c.children[1].textContent=greet();c.children[2].textContent=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});const xc=c.querySelector('.xc');if(xc)xc.textContent=xmasLine()}
 setInterval(tick,10000);
 // drag widgets in edit mode
 let drag=null;
@@ -162,7 +230,8 @@ document.addEventListener('pointerup',()=>{if(drag){drag.w.style.cursor='';drag=
 const WIDS=[['clock','Clock & greeting'],['search','Search bar'],['dial','Speed dial'],['weather','Weather'],['notes','Notes'],['recent','Recent tabs']];
 const lum=h=>{const n=parseInt(h.slice(1),16);return (0.299*(n>>16&255)+0.587*(n>>8&255)+0.114*(n&255))/255};
 let dtab='wall';
-const rng=(l,v,min,max,step,fmt,key)=>`<div class="row"><label>${l}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-r="${key}"><span>${fmt(v)}</span></div>`;
+const pct=(v,min,max)=>((v-min)/(max-min)*100).toFixed(1)+'%';
+const rng=(l,v,min,max,step,fmt,key)=>`<div class="row"><label>${l}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-r="${key}" style="--p:${pct(v,min,max)}"><span class="val">${fmt(v)}</span></div>`;
 const tog=(on,key)=>`<button class="sw2 ${on?'on':''}" data-tg="${key}" role="switch" aria-checked="${!!on}"><i></i></button>`;
 function tile(g,i){return `<button data-g="${i}" title="${g[0]}" style="background:${g[1]}" class="${cfg.wall&&cfg.wall.css===g[1]?'on':''}${g[2]?' lt':''}"><span>${g[0]}</span></button>`}
 function pane(){
@@ -187,6 +256,9 @@ function pane(){
    <div class="stack"><input class="in" id="dn" placeholder="Name (optional)"><div class="addrow"><input class="in" id="du" placeholder="Website, e.g. github.com"><button class="btn sm" id="dadd">Add</button></div></div>`:''}
   ${cfg.widgets.weather.on?`<h5>Weather</h5><div class="addrow"><input class="in" id="city" placeholder="City or ZIP" value="${esc(cfg.weather.city)}"><div class="seg sm">${['F','C'].map(u=>`<button data-u="${u}" class="${cfg.weather.unit===u?'on':''}">°${u}</button>`).join('')}</div></div>`:''}`;
  return `
+  <h5>Holiday</h5><div class="xcard"><div class="xh"><i class="xi">${ico('tree')}</i><div><b>Christmas</b><small>Snow, fairy lights and festive colours</small></div>${tog(xon(),'xmas')}</div>
+   ${xon()?`<div class="xopts">${[['snow','Snowfall'],['lights','Fairy lights'],['drift','Snow drifts'],['caps','Snow on widgets'],['count','Countdown to Christmas']].map(o=>`<div class="wrow"><span>${o[1]}</span>${tog(cfg.xmas[o[0]],'x:'+o[0])}</div>`).join('')}
+    ${cfg.xmas.snow?rng('Snow',cfg.xmas.amount||1,0.3,2.5,0.1,v=>(+v).toFixed(1)+'×','amount'):''}</div>`:''}</div>
   <h5>Mode</h5><div class="seg full">${[[0,'Dark'],[1,'Light']].map(o=>`<button data-m="${o[0]}" class="${(!!theme.light)===!!o[0]?'on':''}">${o[1]}</button>`).join('')}</div>
   <h5>Accent colour</h5><div class="sw">${ACC.map(a=>`<i data-a="${a}" style="background:${a};color:${a}" class="${theme.accent===a?'on':''}"></i>`).join('')}<input type="color" id="acc" value="${theme.accent}"></div>
   <h5>Glass</h5>${rng('Intensity',theme.glass,0,1,0.01,v=>Math.round(v*100)+'%','glass')}<small class="hint">Layout and the Glass / Flat style are in Settings → Appearance.</small>
@@ -204,6 +276,8 @@ drawerEl.addEventListener('click',e=>{const t=e.target.closest('button,i,.chip')
  if(t.id==='gapply'){setWall({kind:'gradient',css:`linear-gradient(${grad.deg}deg,${grad.a},${grad.b})`,light:(lum(grad.a)+lum(grad.b))/2>.6});drawer();return}
  if(t.dataset.fx){cfg.effect=t.dataset.fx;applyFx();save();drawer();return}
  if(t.dataset.tg){const k=t.dataset.tg;if(k==='perf'){theme.perf=!theme.perf;applyTheme();applyFx();send({t:'theme_set',accent:theme.accent,glass:theme.glass,perf:theme.perf})}
+   else if(k==='xmas')setXmas(!xon());
+   else if(k.startsWith('x:')){const o=k.slice(2);cfg.xmas[o]=!cfg.xmas[o];applyFx();applyXmas();save()}
    else{const id=k.slice(2);cfg.widgets[id].on=!cfg.widgets[id].on;renderWidgets();save()}drawer();return}
  if(t.id==='edit'){edit=!edit;document.body.classList.toggle('edit',edit);drawer();return}
  if(t.id==='reset'){cfg.widgets=Object.assign(cfg.widgets,Object.fromEntries(Object.entries(DEF().widgets).map(([k,v])=>[k,{...cfg.widgets[k],x:v.x,y:v.y}])));renderWidgets();save();return}
@@ -213,7 +287,8 @@ drawerEl.addEventListener('click',e=>{const t=e.target.closest('button,i,.chip')
  if(t.dataset.m!==undefined){const want=!!+t.dataset.m;if(want!==!!theme.light)send({t:'theme'});return}
  if(t.dataset.a){theme.accent=t.dataset.a;applyTheme();send({t:'theme_set',accent:theme.accent,glass:theme.glass,perf:!!theme.perf});drawer();return}});
 drawerEl.addEventListener('input',e=>{const r=e.target;
- if(r.dataset.r){const v=+r.value,k=r.dataset.r;r.nextElementSibling.textContent=k==='blur'?v+'px':k==='dim'?v+'%':k==='deg'?v+'°':k==='speed'?v.toFixed(1)+'×':Math.round(v*100)+'%';
+ if(r.dataset.r){const v=+r.value,k=r.dataset.r;r.style.setProperty('--p',pct(v,+r.min,+r.max));r.nextElementSibling.textContent=k==='blur'?v+'px':k==='dim'?v+'%':k==='deg'?v+'°':k==='speed'||k==='amount'?v.toFixed(1)+'×':Math.round(v*100)+'%';
+  if(k==='amount'){cfg.xmas.amount=v;applyFx();save();return}
   if(k==='blur'||k==='dim'){cfg[k]=v;if(!rafW)rafW=requestAnimationFrame(()=>{rafW=0;applyWall()});save()}
   else if(k==='speed'){cfg.speed=v;applyFx();save()}else if(k==='deg')grad.deg=v;
   else if(k==='glass'){theme.glass=v;applyTheme();send({t:'theme_set',accent:theme.accent,glass:v,perf:!!theme.perf})}return}
@@ -231,9 +306,10 @@ window.wispUpdate=p=>{const old=cfg,nc=merge(DEF(),p.cfg||{});
  cfg=nc;theme=p.theme;recent=p.recent||[];space=p.space||space;
  if(themeChanged)applyTheme();
  if(canon(old.wall)!==canon(nc.wall)||old.blur!==nc.blur||old.dim!==nc.dim)applyWall();
- if(old.effect!==nc.effect||old.speed!==nc.speed)applyFx();
+ if(old.effect!==nc.effect||old.speed!==nc.speed||canon(old.xmas)!==canon(nc.xmas))applyFx();
+ if(canon(old.xmas)!==canon(nc.xmas)||themeChanged)applyXmas();
  const ae=document.activeElement;if(!(ae&&(ae.tagName==='TEXTAREA'||ae.tagName==='INPUT'))&&(canon(old.widgets)!==canon(nc.widgets)||canon(old.dial)!==canon(nc.dial)||(recentChanged&&nc.widgets.recent.on)||canon(old.weather)!==canon(nc.weather)))renderWidgets();
  if(!$('#drawer').contains(ae))drawer()};
 window.wispWallpaper=(url,kind)=>{setWall({kind,url});drawer()};
-renderWidgets();applyWall();applyFx();applyTheme();send({t:'nt_ready'});
+renderWidgets();applyWall();applyFx();applyTheme();applyXmas();send({t:'nt_ready'});
 </script></body></html>

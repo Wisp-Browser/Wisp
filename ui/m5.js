@@ -213,7 +213,7 @@ function closeLib(){$('#libm').classList.remove('open');ov('lib',false)}
 const reqLib=()=>act('lib',{what:lib.tab,q:lib.q});
 const ago=ts=>{const s=Date.now()/1000-ts;return s<90?'just now':s<5400?Math.round(s/60)+' min ago':s<172800?Math.round(s/3600)+' h ago':new Date(ts*1000).toLocaleDateString([],{month:'short',day:'numeric'})};
 function renderLib(items){lib.items=items;const b=$('#libbody');
- const head=lib.tab==='history'?'<div class="lbar"><button class="pbtn" id="hclr">Clear all history</button></div>':lib.tab==='downloads'?'<div class="lbar"><button class="pbtn" id="dclr">Clear list</button></div>':'';
+ const head=lib.tab==='bookmarks'?'<div class="lbar"><button class="pbtn" id="bnf">New folder</button></div>':lib.tab==='history'?'<div class="lbar"><button class="pbtn" id="hclr">Clear all history</button></div>':lib.tab==='downloads'?'<div class="lbar"><button class="pbtn" id="dclr">Clear list</button></div>':'';
  if(!items.length){b.innerHTML=head+`<div class="none">${lib.tab==='bookmarks'?'No bookmarks yet. Press Ctrl+D on a page, or import them in Settings → Bookmarks.':lib.tab==='history'?'No history yet.':'No downloads yet.'}</div>`}
  else b.innerHTML=head+items.map((x,i)=>lib.tab==='downloads'
   ?`<div class="lr"><i>${I.file}</i><div class="lt"><b>${esc(x.name)}</b><small>${x.state==='progress'?'Downloading…':x.state==='failed'?'Failed':'Saved · '+ago(x.ts)}</small></div>${x.state==='done'?`<button class="pbtn" data-o="${x.id}">Open</button><button class="pbtn" data-s="${x.id}">Show in folder</button>`:''}</div>`
@@ -221,6 +221,7 @@ function renderLib(items){lib.items=items;const b=$('#libbody');
  b.querySelectorAll('.lr.go').forEach(r=>r.onclick=e=>{if(e.target.closest('[data-d]'))return;closeLib();act('go',{input:r.dataset.u})});
  b.querySelectorAll('[data-d]').forEach(x=>x.onclick=()=>act(lib.tab==='bookmarks'?'bm_del':'hist_del',{url:lib.items[+x.dataset.d].url,q:lib.q}));
  b.querySelectorAll('[data-o]').forEach(x=>x.onclick=()=>act('dl_open',{id:+x.dataset.o}));b.querySelectorAll('[data-s]').forEach(x=>x.onclick=()=>act('dl_show',{id:+x.dataset.s}));
+ const nf=$('#bnf');if(nf)nf.onclick=()=>{const n=prompt('Folder name');if(n&&n.trim())act('bm_folder_new',{name:n.trim()})};
  const h=$('#hclr');if(h)h.onclick=()=>{act('clear',{what:['history']});setTimeout(reqLib,120)};const d=$('#dclr');if(d)d.onclick=()=>act('dl_clear')}
 
 // ---------- settings ----------
