@@ -42,7 +42,7 @@ button{font:inherit;cursor:default}
 .meta b{display:block;font-size:14.5px;font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta small{color:var(--fg3);font-size:12px}
 .desc{margin:0;color:var(--fg2);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.9em}
-.acts{display:flex;align-items:center;gap:4px;margin-top:auto}
+.acts{display:flex;align-items:center;flex-wrap:wrap;gap:6px 4px;margin-top:auto}
 .acts .sp{flex:1}
 .lnk{border:0;background:none;color:var(--fg2);padding:6px 7px;white-space:nowrap;border-radius:8px;font-size:12.5px;font-weight:550}
 .lnk:hover{background:var(--hover);color:var(--fg)}
@@ -53,7 +53,8 @@ button{font:inherit;cursor:default}
 .empty{padding:28px;text-align:center;color:var(--fg2)}
 .empty .i{width:34px;height:34px;color:var(--fg3);margin-bottom:6px}
 .tile{padding:14px;display:flex;gap:12px;align-items:center}
-.tile .ico{width:40px;height:40px;border-radius:11px;color:#fff;font-size:17px}
+.tile .ico{width:40px;height:40px;border-radius:11px;color:#fff;font-size:17px;position:relative}
+.tile .ico img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:var(--page);border-radius:inherit}
 .tile .meta small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .note{display:flex;gap:12px;padding:14px 16px;margin-top:36px;color:var(--fg2);font-size:12.5px}
 .note .i{color:var(--fg3);margin-top:1px}
@@ -92,7 +93,7 @@ const POPULAR=[
  ['ddkjiahejlhfcafbddmgiahcphecmpfh','uBlock Origin Lite','Content blocker that respects your privacy','#800000'],
  ['eimadpbcbfnmbkopoojfekhnkhdbieeh','Dark Reader','Dark mode for every website','#141e24'],
  ['nngceckbapebfimnlniiiahkandclblb','Bitwarden','Free, open-source password manager','#175ddc'],
- ['aeblfdkhhhdcdjpifhhbdiojplfjncoa','1Password','Password manager and secure wallet','#0572ec'],
+ ['aeblfdkhhhdcdjpifhhbdiojplfjncoa','1Password','Password manager and secure wallet','#0572ec','1password-%E2%80%93-password-mana'],
  ['kbfnbcaeplbcioakkpcpgfkobkghlhen','Grammarly','Writing help on the sites you use','#15c39a'],
  ['aapbdbdomjkkjkaonfhkkikfgjllcleb','Google Translate','Translate words and whole pages','#4285f4'],
  ['gebbhagfogifgggkldgodflihgfeippi','Return YouTube Dislike','Shows YouTube dislike counts again','#cc0000'],
@@ -102,7 +103,7 @@ const POPULAR=[
  ['bcjindcccaagfpapjjmafapmmgkkhgoa','JSON Formatter','Makes JSON easy to read','#5e5ce6'],
  ['gppongmhjkpfnbhagpmjfkannfbllamg','Wappalyzer','See what websites are built with','#4608ad'],
 ];
-let D={items:[],busy:[],theme:{}};
+let D={items:[],busy:[],theme:{}},iconV=0;
 [['#logo','puzzle'],['#si','search'],['#li','plus'],['#ni','info']].forEach(([s,n])=>$(s).innerHTML=ico(n));
 $('#openstore').innerHTML=ico('store')+'Chrome Web Store';
 function applyTheme(t){const b=document.body.classList;b.toggle('light',!!t.light);b.toggle('flat',!!t.flat);b.toggle('glass',!t.flat);
@@ -120,7 +121,7 @@ function render(){
    <button class="lnk" data-a="details">Details</button><button class="lnk" data-a="update" ${busy.has(x.id)?'disabled':''}>${busy.has(x.id)?'<span class="busy"></span>':'Update'}</button><button class="lnk danger" data-a="remove">Remove</button></div></div>`).join('')+'</div>'
   :`<div class="panel empty">${ico('puzzle')}<div>No extensions yet. Search the Chrome Web Store above, or add one of the popular ones below.</div></div>`;
  const have=new Set(xs.map(x=>x.id));
- $('#popular').innerHTML=POPULAR.map(([id,n,d,c])=>`<div class="panel tile"><div class="ico" style="background:${c}">${esc(n[0])}</div><div class="meta"><b>${esc(n)}</b><small title="${esc(d)}">${esc(d)}</small></div>
+ $('#popular').innerHTML=POPULAR.map(([id,n,d,c])=>`<div class="panel tile"><div class="ico" style="background:${c}">${esc(n[0])}<img src="/storeicon/${id}?v=${iconV}" alt="" onerror="this.remove()"></div><div class="meta"><b>${esc(n)}</b><small title="${esc(d)}">${esc(d)}</small></div>
   ${have.has(id)?'<button class="btn done">'+ico('check')+'Added</button>':busy.has(id)?'<button class="btn" disabled><span class="busy"></span></button>':`<button class="btn go" data-add="${id}">${ico('plus')}Add</button>`}</div>`).join('');
 }
 document.addEventListener('click',e=>{const a=e.target.closest('[data-a]'),add=e.target.closest('[data-add]');
@@ -136,6 +137,7 @@ const addLink=()=>{const v=$('#link').value.trim();if(!v)return;send({t:'ext_add
 $('#add').onclick=addLink;$('#link').onkeydown=e=>{if(e.key==='Enter')addLink()};
 $('#openstore').onclick=()=>send({t:'ext_store',q:''});
 window.wispExt=d=>{D=d||D;applyTheme(D.theme||{});render()};
-render();send({t:'ext_list'});
+window.wispStoreIcons=()=>{iconV++;render()};
+render();send({t:'ext_list'});send({t:'ext_icons',ids:POPULAR.map(p=>p[4]?p[4]+'/'+p[0]:p[0])});
 </script>
 </body></html>

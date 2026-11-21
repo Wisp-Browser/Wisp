@@ -520,6 +520,79 @@ pub fn delete_files(id: &str) {
     cleanup();
 }
 
+/// Where Chrome Web Store icons for extensions that aren't installed are kept.
+pub fn store_icon_path(id: &str) -> PathBuf {
+    crate::store::real_data_dir().join("store-icons").join(format!("{id}.png"))
+}
+
+/// Download the icon the Chrome Web Store shows for `id` (its page's preview image). `slug` is the
+/// name part of the store's address, when known: the store redirects other addresses there, and
+/// for names with non-ASCII characters that redirect can't be followed.
+pub fn fetch_store_icon(id: &str, slug: &str) -> Result<(), String> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(10))
+        .timeout_read(std::time::Duration::from_secs(20))
+        .redirects(0)
+        .build();
+    // Redirects are followed by hand: the store sends addresses with raw non-ASCII characters
+    // (an extension's name in the path), which have to be percent-encoded first.
+    let ok_slug = !slug.is_empty() && slug.bytes().all(|b| b.is_ascii_alphanumeric() || b"%._-".contains(&b));
+    let mut url = if ok_slug {
+        format!("https://chromewebstore.google.com/detail/{slug}/{id}")
+    } else {
+        format!("https://chromewebstore.google.com/detail/{id}")
+    };
+    let mut resp = None;
+    for _ in 0..5 {
+        let r = agent.get(&url).call().map_err(|e| e.to_string())?;
+        match (r.status(), r.header("location")) {
+            (300..=399, Some(loc)) => {
+                let loc: String = loc
+                    .bytes()
+                    .map(|b| {
+                        if b.is_ascii() {
+                            (b as char).to_string()
+                        } else {
+                            format!("%{b:02X}")
+                        }
+                    })
+                    .collect();
+                url = if loc.starts_with('/') {
+                    format!("https://chromewebstore.google.com{loc}")
+                } else {
+                    loc
+                };
+            }
+            _ => {
+                resp = Some(r);
+                break;
+            }
+        }
+    }
+    let page = resp.ok_or("too many redirects")?.into_string().map_err(|e| e.to_string())?;
+    let tag = page.find("property=\"og:image\"").ok_or("no icon")?;
+    let rest = &page[tag..];
+    let start = rest.find("content=\"").ok_or("no icon")? + 9;
+    let url = &rest[start..start + rest[start..].find('"').ok_or("no icon")?];
+    if !url.starts_with("https://lh3.googleusercontent.com/") {
+        return Err("unexpected icon address".into());
+    }
+    let mut buf = vec![];
+    agent
+        .get(&url.replace("&amp;", "&"))
+        .call()
+        .map_err(|e| e.to_string())?
+        .into_reader()
+        .take(2 * 1024 * 1024)
+        .read_to_end(&mut buf)
+        .map_err(|e| e.to_string())?;
+    let path = store_icon_path(id);
+    if let Some(d) = path.parent() {
+        fs::create_dir_all(d).map_err(|e| e.to_string())?;
+    }
+    fs::write(path, buf).map_err(|e| e.to_string())
+}
+
 /// Keep each installed extension's compatibility script current with this version of Wisp.
 pub fn refresh_compat(list: &[Ext]) {
     for e in list {

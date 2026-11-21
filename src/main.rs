@@ -257,6 +257,8 @@ enum Ev {
     PopupIpc(String),
     /// An extension couldn't be loaded into the engine.
     ExtLoadErr(String),
+    /// Chrome Web Store icons finished downloading.
+    StoreIcons,
     /// No size came from the extension popup: give it Chrome's default.
     PopupFallback(u64),
 }
@@ -877,6 +879,14 @@ fn serve(req: Request<Vec<u8>>, dir: &Path) -> Response<Cow<'static, [u8]>> {
         "/chrome" => respond(200, "text/html; charset=utf-8", CHROME.as_bytes().to_vec()),
         "/newtab" => respond(200, "text/html; charset=utf-8", NEWTAB.as_bytes().to_vec()),
         "/extensions" => respond(200, "text/html; charset=utf-8", EXT_PAGE.as_bytes().to_vec()),
+        // Chrome Web Store icons for the Extensions page: /storeicon/<id>.
+        p if p.starts_with("/storeicon/") => {
+            let id = &p[11..];
+            match extensions::valid_id(id).then(|| fs::read(extensions::store_icon_path(id))) {
+                Some(Ok(b)) => respond(200, "image/png", b),
+                _ => respond(404, "text/plain", vec![]),
+            }
+        }
         // Extension icons for Wisp's own pages: /ext/<id>/<path inside the extension>.
         p if p.starts_with("/ext/") => {
             let rest = &p[5..];
@@ -2312,6 +2322,35 @@ impl App {
             }
             "ext_confirm" => self.ext_confirm(&s("id"), m["ok"].as_bool().unwrap_or(false)),
             "ext_list" => self.ext_emit(),
+            // Download (once) the store icons the Extensions page shows for popular extensions.
+            "ext_icons" => {
+                let ids: Vec<String> = m["ids"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                // Each entry is an ID, or "slug/ID" with the store's name for it.
+                let missing: Vec<(String, String)> = ids
+                    .iter()
+                    .map(|x| match x.rsplit_once('/') {
+                        Some((slug, id)) => (id.to_string(), slug.to_string()),
+                        None => (x.clone(), String::new()),
+                    })
+                    .filter(|(id, _)| extensions::valid_id(id) && !extensions::store_icon_path(id).is_file())
+                    .take(40)
+                    .collect();
+                if !missing.is_empty() {
+                    let p = self.proxy.clone();
+                    std::thread::spawn(move || {
+                        let mut got = false;
+                        for (id, slug) in &missing {
+                            got |= extensions::fetch_store_icon(id, slug).is_ok();
+                        }
+                        if got {
+                            let _ = p.send_event(Ev::StoreIcons);
+                        }
+                    });
+                }
+            }
             "ext_toggle" => {
                 let id = s("id");
                 if let Some(e) = self.exts.iter_mut().find(|e| e.id == id) {
@@ -3711,6 +3750,15 @@ impl App {
             }
             Ev::NewWindow(u) => self.open_tab(&u, false),
             Ev::ExtFetched(id, r) => self.ext_fetched(&id, *r),
+            Ev::StoreIcons => {
+                for s in &self.spaces {
+                    for t in s.tabs.iter().filter(|t| t.url == EXT_ID) {
+                        if let Some(v) = &t.view {
+                            let _ = v.evaluate_script("window.wispStoreIcons&&window.wispStoreIcons()");
+                        }
+                    }
+                }
+            }
             Ev::ExtLoadErr(id) => {
                 let n = self.exts.iter().find(|e| e.id == id).map(|e| e.name.clone()).unwrap_or(id);
                 self.toast(&format!("{n} couldn't be loaded by the engine"));
