@@ -83,6 +83,8 @@ pub struct Settings {
     pub font: String,
     /// Bookmarks bar under the toolbar (shown when there are bookmarks).
     pub bmbar: bool,
+    /// Extensions pinned to the toolbar (their IDs, in order).
+    pub ext_pins: Vec<String>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -109,6 +111,7 @@ impl Default for Settings {
             setup: false,
             font: "inter".into(),
             bmbar: true,
+            ext_pins: vec![],
         }
     }
 }

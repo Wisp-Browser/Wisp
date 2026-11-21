@@ -24,6 +24,7 @@ rfd = "0.15"
 ureq = "2"
 sha2 = "0.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 keyring = { version = "3", features = ["windows-native"] }
 
 [target.'cfg(windows)'.dependencies]

@@ -102,7 +102,7 @@ body.lay-vertical .tab.new{animation-name:tabinv}
 .ghost{position:fixed;pointer-events:none;z-index:4;animation:tabout var(--dur) var(--ease) forwards;margin:0}
 @keyframes tabout{to{opacity:0;transform:scale(.92)}}
 .ic{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;font-size:10px;font-weight:600;flex:none;overflow:hidden;color:var(--fg2)}
-.ic img{width:16px;height:16px}
+.ic img,.ic .i{width:16px;height:16px}
 .tab.loading .ic{border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .75s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .tt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -177,6 +177,7 @@ body.fs .row,body.fs #side{display:none}
  <button class="ib" id="newh" title="New tab (Ctrl+T)"></button>
  <div class="drag" id="drag"></div>
  <em id="privbadge" class="hidden"></em>
+ <div id="extpins"></div><button class="ib" id="extbtn" title="Extensions"></button>
  <button class="ib" id="morebtn" title="More"></button>
  <div class="wc" id="wc"><button id="min" title="Minimize"><svg viewBox="0 0 10 10"><path d="M1 5h8"/></svg></button><button id="max" title="Maximize"><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1.2"/></svg></button><button class="x" id="cls" title="Close"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button></div>
 </div>
@@ -193,6 +194,7 @@ body.fs .row,body.fs #side{display:none}
 <div class="veil" id="palm"><div class="box big glass-m"><div class="pqw"><span class="pqi"></span><input id="pq" placeholder="Type a command, tab, or address…" autocomplete="off"></div><div id="pr"></div></div></div>
 <div class="veil" id="libm"><div class="box big glass-m xl"><div class="mh"><div class="seg" id="libtabs"></div><input id="libq" placeholder="Search"><button class="ib" id="libx" title="Close"></button></div><div id="libbody"></div></div></div>
 <div class="veil" id="setm"><div class="box big glass-m xl setbox"><nav id="setnav"></nav><div id="setbody"></div></div></div>
+<div class="veil" id="extm"><div class="box glass-m" id="extbox"></div></div>
 <div class="veil" id="setup"><div class="box glass-m" id="setupbox"></div></div>
 <script src="/icons.js"></script>
 <script src="/ai.js"></script>
@@ -203,7 +205,7 @@ const COLORS=['#ff6b5e','#ff9f43','#f7d154','#4cd98f','#3fc8e8','#6c8cff','#a46b
 let S={spaces:[],tabs:[],active:-1,split:null,divs:[],engines:[],engine:'ddg',light:false,accent:'#5e5ce6',glass:.5,nt:null,layout:'classic',glass_on:true,glass_ok:false,collapsed:false},dragId=null,editing=null,spColor=COLORS[0];
 const RM=matchMedia('(prefers-reduced-motion: reduce)');
 // static icons
-[['#back','back'],['#fwd','fwd'],['#rel','reload'],['#newh','plus'],['#morebtn','dots'],['#sidetog','sidebar'],['#shbtn','shield'],['#bmbtn','star'],['#libx','x'],['#fprev','up'],['#fnext','down'],['#fx','x']].forEach(([s,n])=>$(s).innerHTML=ico(n));
+[['#back','back'],['#fwd','fwd'],['#rel','reload'],['#newh','plus'],['#morebtn','dots'],['#extbtn','puzzle'],['#sidetog','sidebar'],['#shbtn','shield'],['#bmbtn','star'],['#libx','x'],['#fprev','up'],['#fnext','down'],['#fx','x']].forEach(([s,n])=>$(s).innerHTML=ico(n));
 $('#shbtn').insertAdjacentHTML('beforeend','<b id="shn"></b>');
 $('#spbtn').insertAdjacentHTML('beforeend',ico('chev'));
 $('#new .ni').outerHTML=ico('plus');$('#findbar .fi').outerHTML=ico('search');$('#palm .pqi').outerHTML=ico('search');
@@ -211,9 +213,9 @@ $('#unsplit').innerHTML=ico('split')+'Unsplit';$('#aibtn').innerHTML=ico('sparkl
 
 // ---- layout slots: one set of controls, arranged per layout ----
 const SLOTS={
- classic:{row1:['spbtn','tabs','newh','drag','privbadge','wc'],row2:['navg','omni','morebtn']},
- compact:{row1:['spbtn','navg','omni','tabs','newh','drag','morebtn','privbadge','wc']},
- vertical:{row1:['sidetog','navg','omni','drag','morebtn','privbadge','wc'],side:['spaces','tabs','new']}};
+ classic:{row1:['spbtn','tabs','newh','drag','privbadge','wc'],row2:['navg','omni','extpins','extbtn','morebtn']},
+ compact:{row1:['spbtn','navg','omni','tabs','newh','drag','extpins','extbtn','morebtn','privbadge','wc']},
+ vertical:{row1:['sidetog','navg','omni','drag','extpins','extbtn','morebtn','privbadge','wc'],side:['spaces','tabs','new']}};
 let placed='';
 function place(lay){if(placed===lay)return;placed=lay;const parts=$('#parts'),focus=document.activeElement===$('#url');
  ['row1','row2','side'].forEach(r=>[...$('#'+r).children].forEach(c=>parts.appendChild(c)));
@@ -221,7 +223,7 @@ function place(lay){if(placed===lay)return;placed=lay;const parts=$('#parts'),fo
  if(focus)$('#url').focus();tabEls.forEach(d=>d.classList.remove('new'));tabSig='';syncTabs();if(window.M5)M5.relayout()}
 
 const XI=ico('x');
-const ic=t=>{try{const u=new URL(t.url);if(u.protocol.startsWith('http'))return `<img src="${u.origin}/favicon.ico" alt="${(t.title||'•')[0].toUpperCase().replace(/[^A-Z0-9a-z•]/g,'•')}" onerror="this.parentNode.textContent=this.alt">`}catch(e){}return t.url==='wisp://newtab'?'<img src="/logo.svg" alt="">':(t.title||'•')[0].toUpperCase()};
+const ic=t=>{try{const u=new URL(t.url);if(u.protocol.startsWith('http'))return `<img src="${u.origin}/favicon.ico" alt="${(t.title||'•')[0].toUpperCase().replace(/[^A-Z0-9a-z•]/g,'•')}" onerror="this.parentNode.textContent=this.alt">`}catch(e){}return t.url==='wisp://newtab'?'<img src="/logo.svg" alt="">':t.url==='wisp://extensions'?ico('puzzle'):(t.title||'•')[0].toUpperCase()};
 const tabEls=new Map(),extraEls=new Map();let firstRender=true,spaceSig='',tabSig='';
 function mkTab(){const d=document.createElement('div');d.draggable=true;d.className='tab'+(firstRender?'':' new');
   d.innerHTML=`<span class="ic"></span><span class="tt"></span><span class="badge"></span><button class="tb pn"></button><button class="tb cl" title="Close (Ctrl+W)">${XI}</button>`;

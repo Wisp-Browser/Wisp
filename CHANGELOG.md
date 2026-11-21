@@ -6,6 +6,18 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Chrome extensions. Add them from the Chrome Web Store, where the store's own "Add to Chrome"
+  button now reads "Add to Wisp", or from the new Extensions page (`wisp://extensions`: search the
+  store, paste a link, or pick a popular extension). Wisp shows Chrome's permission warnings before
+  installing anything.
+  - Extensions keep their Web Store ID. Their content scripts, background workers, popups, options
+    pages and settings work as in Chrome. They are shared by every space and off in private windows.
+  - A puzzle button next to the menu lists your extensions and opens their popups. You can pin
+    extensions to the toolbar.
+  - Settings → Extensions: open the store, manage extensions, turn them on or off.
+  - Update or remove an extension from the Extensions page. Updates that ask for more access ask you again.
+
 ## [0.3.0-beta.1] - 2026-11-21
 
 ### Fixed

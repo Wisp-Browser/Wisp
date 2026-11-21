@@ -34,6 +34,24 @@ body.private #tint{background:color-mix(in srgb,#7c4dff 14%,var(--frame))}
 .menu button.danger:hover,.menu button.danger:focus-visible{background:color-mix(in srgb,var(--danger) 16%,transparent)}
 .menu button.danger:active{background:color-mix(in srgb,var(--danger) 24%,transparent)}
 .msep{height:1px;background:var(--line);margin:5px 8px}
+/* extensions: toolbar pins, the Extensions menu and the install dialog */
+#extpins{display:flex;align-items:center;gap:2px}#extpins:empty{display:none}
+#extpins .ib img,.xrow img,#setbody .srow img{width:18px;height:18px;object-fit:contain;border-radius:4px}
+#extpins .ib.on,#extbtn.on{background:var(--press)}
+.xl0{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;flex:none;background:var(--accent-soft);color:var(--fg);font-size:11px;font-weight:700}
+#pop .xrow{display:flex;align-items:center;gap:4px}
+#pop .xrow>button:first-child{flex:1;min-width:0}
+#pop .xrow .xp{width:30px;height:30px;flex:none;justify-content:center;padding:0;color:var(--fg3)}
+#pop .xrow .xp.on{color:var(--accent)}
+#pop .xnone{padding:6px 10px 10px;color:var(--fg2);font-size:12.5px;line-height:1.45}
+#pop.xpop{min-width:280px;max-width:320px}
+#extbox{width:420px}
+#extbox .xh{display:flex;gap:14px;align-items:center;margin-bottom:12px}
+#extbox .xh img,#extbox .xh .xl0{width:44px;height:44px;border-radius:12px;font-size:20px}
+#extbox h3{margin:0;font-size:16px;line-height:1.35}
+#extbox p{margin:0 0 8px;color:var(--fg2);font-size:13px}
+#extbox ul{margin:0 0 6px;padding-left:20px;font-size:13px;line-height:1.6}
+#extbox .row2{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 /* find bar floats over the top-right of the page */
 #findbar{top:calc(var(--ct) + 10px);right:calc(var(--rt) + 12px);width:min(400px,calc(100vw - 40px));height:44px;border-radius:var(--pill);padding:0 5px 0 14px;align-items:center;gap:4px;transform-origin:top right}
 #findbar.open{display:flex;animation:menuin var(--dur) var(--ease) both}

@@ -1,0 +1,141 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Extensions</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/theme.css"><script src="/icons.js"></script>
+<style>
+html,body{margin:0;min-height:100%;font:14px/1.45 var(--font);color:var(--fg);background:var(--page);-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(1200px 500px at 15% -10%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 70%),var(--page)}
+.i{width:18px;height:18px;flex:none}
+main{max-width:1040px;margin:0 auto;padding:44px 28px 80px}
+header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+.logo{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:var(--accent);color:var(--accent-fg);box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 35%,transparent)}
+.logo .i{width:26px;height:26px}
+h1{margin:0;font-size:26px;font-weight:650;letter-spacing:-.01em}
+header p{margin:2px 0 0;color:var(--fg2)}
+header .grow{flex:1;min-width:220px}
+h2{margin:36px 0 12px;font-size:15px;font-weight:650;display:flex;align-items:center;gap:10px}
+h2 small{font-weight:500;color:var(--fg3);font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-top-color:var(--hi);border-radius:var(--r-lg);box-shadow:var(--shadow-s)}
+.search{display:flex;align-items:center;gap:10px;height:48px;padding:0 8px 0 18px;border-radius:var(--pill);background:var(--raised-2);border:1px solid var(--line);transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
+.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.search .i{color:var(--fg3)}
+.search input{flex:1;min-width:0;background:none;border:0;outline:0;font:inherit;font-size:15px;color:var(--fg)}
+.search input::placeholder{color:var(--fg3)}
+.store{display:grid;grid-template-columns:1fr auto;gap:12px;padding:18px}
+.store .hint{grid-column:1/-1;margin:0;color:var(--fg2);font-size:12.5px}
+button{font:inherit;cursor:default}
+.btn{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--pill);border:1px solid var(--line-2);background:var(--raised);color:var(--fg);font-weight:550;font-size:13px;white-space:nowrap;transition:background-color var(--dur-s) var(--ease),transform var(--dur-s) var(--ease),border-color var(--dur-s) var(--ease)}
+.btn:hover{background:var(--raised-2)}.btn:active{transform:scale(.97)}
+.btn .i{width:16px;height:16px}
+.btn.go{background:var(--accent);border-color:transparent;color:var(--accent-fg)}
+.btn.go:hover{background:color-mix(in srgb,var(--accent) 88%,#fff)}
+.btn.big{height:40px;padding:0 18px;font-size:14px}
+.btn.danger:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,transparent)}
+.btn[disabled]{opacity:.55;pointer-events:none}
+.btn.done{background:color-mix(in srgb,var(--ok) 16%,transparent);border-color:transparent;color:var(--ok)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card{padding:16px;display:flex;flex-direction:column;gap:12px;transition:opacity var(--dur) var(--ease)}
+.card.off{opacity:.62}
+.top{display:flex;gap:14px;align-items:flex-start}
+.ico{width:44px;height:44px;border-radius:12px;flex:none;display:grid;place-items:center;background:var(--hover);overflow:hidden;font-weight:700;font-size:18px}
+.ico img{width:36px;height:36px;object-fit:contain}
+.meta{flex:1;min-width:0}
+.meta b{display:block;font-size:14.5px;font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta small{color:var(--fg3);font-size:12px}
+.desc{margin:0;color:var(--fg2);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.9em}
+.acts{display:flex;align-items:center;gap:4px;margin-top:auto}
+.acts .sp{flex:1}
+.lnk{border:0;background:none;color:var(--fg2);padding:6px 7px;white-space:nowrap;border-radius:8px;font-size:12.5px;font-weight:550}
+.lnk:hover{background:var(--hover);color:var(--fg)}
+.lnk.danger:hover{color:var(--danger)}
+.sw{position:relative;width:40px;height:24px;border-radius:12px;border:0;background:var(--press);flex:none;transition:background-color var(--dur) var(--ease)}
+.sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:9px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform var(--dur) var(--ease)}
+.sw.on{background:var(--accent)}.sw.on i{transform:translateX(16px)}
+.empty{padding:28px;text-align:center;color:var(--fg2)}
+.empty .i{width:34px;height:34px;color:var(--fg3);margin-bottom:6px}
+.tile{padding:14px;display:flex;gap:12px;align-items:center}
+.tile .ico{width:40px;height:40px;border-radius:11px;color:#fff;font-size:17px}
+.tile .meta small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note{display:flex;gap:12px;padding:14px 16px;margin-top:36px;color:var(--fg2);font-size:12.5px}
+.note .i{color:var(--fg3);margin-top:1px}
+.note p{margin:0 0 4px}
+.busy{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.busy{animation-duration:2.4s}}
+.priv{padding:22px;text-align:center;color:var(--fg2)}
+</style></head><body>
+<main>
+ <header>
+  <div class="logo" id="logo"></div>
+  <div class="grow"><h1>Extensions</h1><p>Add Chrome extensions to Wisp. They run on the same engine as Microsoft Edge, so they work like they do in Chrome.</p></div>
+  <button class="btn big go" id="openstore"></button>
+ </header>
+ <div id="privnote" class="panel priv" hidden>Extensions are turned off in private windows.</div>
+ <section class="panel store">
+  <label class="search"><span id="si"></span><input id="q" placeholder="Search the Chrome Web Store" spellcheck="false" autocomplete="off"><button class="btn go" id="qgo">Search</button></label>
+  <label class="search"><span id="li"></span><input id="link" placeholder="Paste a store link or ID" spellcheck="false" autocomplete="off"><button class="btn" id="add">Add</button></label>
+  <p class="hint">In the Chrome Web Store, the <b>Add to Chrome</b> button reads <b>Add to Wisp</b>. Wisp shows what an extension can access before anything is installed.</p>
+ </section>
+ <h2>Installed <small id="count"></small></h2>
+ <div id="installed"></div>
+ <h2>Popular extensions <small>from the Chrome Web Store</small></h2>
+ <div class="grid" id="popular"></div>
+ <div class="panel note"><span id="ni"></span><div>
+  <p>Extensions keep their Chrome Web Store ID, settings and sign-ins, and are shared by every space. Open an extension from the puzzle button next to the menu, or pin it to the toolbar.</p>
+  <p>Wisp uses Microsoft’s WebView2 engine. A few Chrome-only features (such as Chrome’s side panel or Google account sync) aren’t available to extensions.</p>
+ </div></div>
+</main>
+<script>
+const $=s=>document.querySelector(s),send=o=>window.ipc.postMessage(JSON.stringify(o));
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// A hand-picked starter list (IDs are the Chrome Web Store's).
+const POPULAR=[
+ ['ddkjiahejlhfcafbddmgiahcphecmpfh','uBlock Origin Lite','Content blocker that respects your privacy','#800000'],
+ ['eimadpbcbfnmbkopoojfekhnkhdbieeh','Dark Reader','Dark mode for every website','#141e24'],
+ ['nngceckbapebfimnlniiiahkandclblb','Bitwarden','Free, open-source password manager','#175ddc'],
+ ['aeblfdkhhhdcdjpifhhbdiojplfjncoa','1Password','Password manager and secure wallet','#0572ec'],
+ ['kbfnbcaeplbcioakkpcpgfkobkghlhen','Grammarly','Writing help on the sites you use','#15c39a'],
+ ['aapbdbdomjkkjkaonfhkkikfgjllcleb','Google Translate','Translate words and whole pages','#4285f4'],
+ ['gebbhagfogifgggkldgodflihgfeippi','Return YouTube Dislike','Shows YouTube dislike counts again','#cc0000'],
+ ['mnjggcdmjocbbbhaepdhchncahnbgone','SponsorBlock','Skip sponsor segments in YouTube videos','#d32f2f'],
+ ['dbepggeogbaibhgnhhndojpepiihcmeb','Vimium','Keyboard shortcuts for navigating the web','#2f8f3a'],
+ ['fmkadmapgofadopljbjfkapdkoienihi','React Developer Tools','Inspect React components','#20232a'],
+ ['bcjindcccaagfpapjjmafapmmgkkhgoa','JSON Formatter','Makes JSON easy to read','#5e5ce6'],
+ ['gppongmhjkpfnbhagpmjfkannfbllamg','Wappalyzer','See what websites are built with','#4608ad'],
+];
+let D={items:[],busy:[],theme:{}};
+[['#logo','puzzle'],['#si','search'],['#li','plus'],['#ni','info']].forEach(([s,n])=>$(s).innerHTML=ico(n));
+$('#openstore').innerHTML=ico('store')+'Chrome Web Store';
+function applyTheme(t){const b=document.body.classList;b.toggle('light',!!t.light);b.toggle('flat',!!t.flat);b.toggle('glass',!t.flat);
+ ['inter','rounded','system','serif','mono'].forEach(k=>b.toggle('f-'+k,k===(t.font||'inter')));if(t.accent)document.documentElement.style.setProperty('--accent',t.accent)}
+const letter=n=>esc((n||'?').trim()[0]||'?').toUpperCase();
+const iconHtml=x=>x.icon?`<img src="${esc(x.icon)}" alt="" onerror="this.replaceWith(document.createTextNode('${letter(x.name)}'))">`:letter(x.name);
+function render(){
+ $('#privnote').hidden=!D.private;
+ const xs=D.items||[],busy=new Set(D.busy||[]);$('#count').textContent=xs.length?xs.length+(xs.length===1?' extension':' extensions'):'';
+ $('#installed').innerHTML=xs.length?'<div class="grid">'+xs.map(x=>`<div class="panel card ${x.enabled?'':'off'}" data-id="${esc(x.id)}">
+  <div class="top"><div class="ico">${iconHtml(x)}</div><div class="meta"><b title="${esc(x.name)}">${esc(x.name)}</b><small>Version ${esc(x.version)}${x.enabled?'':' · Off'}</small></div>
+   <button class="sw ${x.enabled?'on':''}" data-a="toggle" role="switch" aria-checked="${!!x.enabled}" title="${x.enabled?'Turn off':'Turn on'}"><i></i></button></div>
+  <p class="desc">${esc(x.description)||'&nbsp;'}</p>
+  <div class="acts">${x.popup&&x.enabled?'<button class="btn" data-a="pin" title="'+(x.pinned?'Remove from the toolbar':'Show on the toolbar')+'">'+ico('pin')+(x.pinned?'Unpin':'Pin')+'</button>':''}${x.options?'<button class="btn" data-a="options">Options</button>':''}<span class="sp"></span>
+   <button class="lnk" data-a="details">Details</button><button class="lnk" data-a="update" ${busy.has(x.id)?'disabled':''}>${busy.has(x.id)?'<span class="busy"></span>':'Update'}</button><button class="lnk danger" data-a="remove">Remove</button></div></div>`).join('')+'</div>'
+  :`<div class="panel empty">${ico('puzzle')}<div>No extensions yet. Search the Chrome Web Store above, or add one of the popular ones below.</div></div>`;
+ const have=new Set(xs.map(x=>x.id));
+ $('#popular').innerHTML=POPULAR.map(([id,n,d,c])=>`<div class="panel tile"><div class="ico" style="background:${c}">${esc(n[0])}</div><div class="meta"><b>${esc(n)}</b><small title="${esc(d)}">${esc(d)}</small></div>
+  ${have.has(id)?'<button class="btn done">'+ico('check')+'Added</button>':busy.has(id)?'<button class="btn" disabled><span class="busy"></span></button>':`<button class="btn go" data-add="${id}">${ico('plus')}Add</button>`}</div>`).join('');
+}
+document.addEventListener('click',e=>{const a=e.target.closest('[data-a]'),add=e.target.closest('[data-add]');
+ if(add){D.busy=[...(D.busy||[]),add.dataset.add];render();send({t:'ext_add',id:add.dataset.add});return}
+ if(!a)return;const id=a.closest('[data-id]').dataset.id,x=(D.items||[]).find(y=>y.id===id);if(!x)return;
+ switch(a.dataset.a){case'toggle':x.enabled=!x.enabled;render();send({t:'ext_toggle',id,on:x.enabled});break;
+  case'options':send({t:'ext_options',id});break;case'details':send({t:'ext_details',id});break;
+  case'update':send({t:'ext_update',id});break;case'pin':send({t:'ext_pin',id});break;
+  case'remove':if(confirm('Remove “'+x.name+'” from Wisp?'))send({t:'ext_remove',id});break}});
+const search=()=>send({t:'ext_store',q:$('#q').value});
+$('#qgo').onclick=search;$('#q').onkeydown=e=>{if(e.key==='Enter')search()};
+const addLink=()=>{const v=$('#link').value.trim();if(!v)return;send({t:'ext_add',input:v});$('#link').value=''};
+$('#add').onclick=addLink;$('#link').onkeydown=e=>{if(e.key==='Enter')addLink()};
+$('#openstore').onclick=()=>send({t:'ext_store',q:''});
+window.wispExt=d=>{D=d||D;applyTheme(D.theme||{});render()};
+render();send({t:'ext_list'});
+</script>
+</body></html>

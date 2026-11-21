@@ -62,7 +62,7 @@ fn looks_like_url(s: &str) -> Option<String> {
         return None;
     }
     if let Ok(u) = Url::parse(s) {
-        if matches!(u.scheme(), "https" | "file" | "about" | "wisp") || (u.scheme() == "http" && u.has_host()) {
+        if matches!(u.scheme(), "https" | "file" | "about" | "wisp" | "chrome-extension") || (u.scheme() == "http" && u.has_host()) {
             return Some(s.to_string());
         }
     }

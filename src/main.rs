@@ -5,6 +5,7 @@
 
 mod ai;
 mod blocker;
+mod extensions;
 mod instance;
 mod layout;
 mod library;
@@ -55,6 +56,10 @@ const FONT_NUNITO: &[u8] = include_bytes!("../ui/fonts/nunito.woff2");
 const BASE: &str = "http://wisp.localhost";
 const NEWTAB_URL: &str = "http://wisp.localhost/newtab";
 const NEWTAB_ID: &str = "wisp://newtab";
+const EXT_URL: &str = "http://wisp.localhost/extensions";
+const EXT_ID: &str = "wisp://extensions";
+const EXT_PAGE: &str = include_str!("../ui/extensions.html");
+const STORE: &str = "https://chromewebstore.google.com";
 
 // Layout geometry (logical px) — mirrored in ui/chrome.html (--ct, --cl, --sw).
 const CONTENT_PAD: f64 = 8.0;
@@ -128,6 +133,27 @@ document.addEventListener('pointerover',e=>{const v=e.target&&e.target.closest&&
  const bt=sr.querySelector('button'),r=v.getBoundingClientRect();bt.style.left=Math.max(8,r.right-44)+'px';bt.style.top=Math.max(8,r.top+10)+'px';
  bt.addEventListener('click',ev=>{if(!ev.isTrusted)return;(document.pictureInPictureElement===v?document.exitPictureInPicture():v.requestPictureInPicture()).catch(()=>{});});
  document.documentElement.appendChild(b);pip=b;const gone=()=>{if(pip){pip.remove();pip=null;pipV=null}};v.addEventListener('pointerleave',ev=>{setTimeout(()=>{if(pip&&!pip.matches(':hover'))gone()},900)},{once:true});setTimeout(gone,6000)},true);
+// Chrome Web Store: the store's own "Add to Chrome" button adds the extension to Wisp instead (Wisp
+// asks before installing). Google's pages enforce Trusted Types, so everything is built with DOM calls.
+if(H==='chromewebstore.google.com'){let have=new Set(__EXTS__),busy='',fab=null;
+ const cur=()=>{const m=location.pathname.match(/\/detail\/(?:[^/]+\/)?([a-p]{32})(?:[/?#]|$)/);return m&&m[1]};
+ const label=id=>have.has(id)?'Added to Wisp':busy===id?'Adding…':'Add to Wisp';
+ const isAdd=b=>/^(Add to Chrome|Remove from Chrome|Add to Wisp|Adding…|Added to Wisp)$/.test((b.textContent||'').trim());
+ const add=id=>{if(!id||have.has(id)||busy===id)return;busy=id;sync();p({t:'ext_add',n:N,id});setTimeout(()=>{if(busy===id){busy='';sync()}},30000)};
+ const relabel=b=>{const w=document.createTreeWalker(b,NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode()))if(n.nodeValue.trim()){const want=label(cur());if(n.nodeValue.trim()!==want)n.nodeValue=want;return true}return false};
+ const sync=()=>{const id=cur();let found=false;
+  if(id)document.querySelectorAll('button').forEach(b=>{if(isAdd(b)&&relabel(b))found=true});
+  // No store button found (layout change): a floating one instead.
+  if(id&&!found){if(!fab){fab=document.createElement('div');fab.style.cssText='all:initial;position:fixed;z-index:2147483647;right:24px;bottom:24px';const r=fab.attachShadow({mode:'closed'}),st=document.createElement('style');
+    st.textContent='button{height:44px;padding:0 20px;border-radius:22px;border:0;background:#5e5ce6;color:#fff;font:600 14px system-ui,Segoe UI,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.3);cursor:pointer}button:active{transform:scale(.97)}';
+    const b=document.createElement('button');b.addEventListener('click',e=>{if(e.isTrusted)add(cur())});r.append(st,b);fab._b=b;document.documentElement.appendChild(fab)}
+   fab._b.textContent=label(id)}
+  else if(fab){fab.remove();fab=null}};
+ addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('button');if(!b||!isAdd(b)||!cur())return;
+  e.preventDefault();e.stopImmediatePropagation();if(e.isTrusted)add(cur())},true);
+ ['pointerdown','pointerup','mousedown','mouseup'].forEach(t=>addEventListener(t,e=>{const b=e.target&&e.target.closest&&e.target.closest('button');if(b&&isAdd(b)&&cur())e.stopImmediatePropagation()},true));
+ window.__wispStore=ids=>{have=new Set(Array.isArray(ids)?ids:[]);busy='';sync()};
+ setInterval(sync,400);addEventListener('DOMContentLoaded',sync)}
 })();"#;
 
 /// Reader mode: builds a clean, themed reading view on top of the current page (Esc or ✕ closes it).
@@ -225,6 +251,14 @@ enum Ev {
     Upd(String),
     Engine(Arc<blocker::Engine>, String),
     Show,
+    /// An extension finished downloading (staged, waiting for the user to confirm).
+    ExtFetched(String, Box<Result<(extensions::Ext, std::path::PathBuf), String>>),
+    /// A message from an open extension popup.
+    PopupIpc(String),
+    /// An extension couldn't be loaded into the engine.
+    ExtLoadErr(String),
+    /// No size came from the extension popup: give it Chrome's default.
+    PopupFallback(u64),
 }
 
 struct Tab {
@@ -308,6 +342,8 @@ fn real(u: &str) -> String {
         NEWTAB_URL.into()
     } else if u == "wisp://newtab#spare" {
         format!("{NEWTAB_URL}#spare")
+    } else if u == EXT_ID {
+        EXT_URL.into()
     } else {
         u.into()
     }
@@ -315,6 +351,8 @@ fn real(u: &str) -> String {
 fn shown(u: &str) -> String {
     if u.starts_with(NEWTAB_URL) {
         NEWTAB_ID.into()
+    } else if u.starts_with(EXT_URL) {
+        EXT_ID.into()
     } else {
         u.into()
     }
@@ -557,6 +595,8 @@ fn base_builder(window: &Window) -> WebViewBuilder<'_> {
         b.with_scroll_bar_style(ScrollBarStyle::FluentOverlay)
             .with_devtools(true)
             .with_additional_browser_args(browser_args())
+            // Chrome extensions (WebView2's own extension support; see extensions.rs).
+            .with_browser_extensions_enabled(!store::is_private())
     };
     b
 }
@@ -802,6 +842,25 @@ fn is_video(name: &str) -> bool {
     matches!(name.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str(), "mp4" | "webm")
 }
 
+/// Decode %XX escapes in a URL path.
+fn pct_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() && s.is_char_boundary(i + 3) {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 fn respond(status: u16, ctype: &str, body: Vec<u8>) -> Response<Cow<'static, [u8]>> {
     Response::builder()
         .status(status)
@@ -817,6 +876,22 @@ fn serve(req: Request<Vec<u8>>, dir: &Path) -> Response<Cow<'static, [u8]>> {
     match path.as_str() {
         "/chrome" => respond(200, "text/html; charset=utf-8", CHROME.as_bytes().to_vec()),
         "/newtab" => respond(200, "text/html; charset=utf-8", NEWTAB.as_bytes().to_vec()),
+        "/extensions" => respond(200, "text/html; charset=utf-8", EXT_PAGE.as_bytes().to_vec()),
+        // Extension icons for Wisp's own pages: /ext/<id>/<path inside the extension>.
+        p if p.starts_with("/ext/") => {
+            let rest = &p[5..];
+            let Some((id, file)) = rest.split_once('/') else {
+                return respond(404, "text/plain", vec![]);
+            };
+            let file = pct_decode(file);
+            if !extensions::valid_id(id) || file.contains("..") || file.contains('\\') || file.contains(':') {
+                return respond(400, "text/plain", vec![]);
+            }
+            match fs::read(extensions::dir_of(id).join(&file)) {
+                Ok(b) => respond(200, mime(&file), b),
+                Err(_) => respond(404, "text/plain", vec![]),
+            }
+        }
         "/logo.svg" => respond(200, "image/svg+xml", LOGO.as_bytes().to_vec()),
         "/ai.js" => respond(200, "text/javascript; charset=utf-8", AI_JS.as_bytes().to_vec()),
         "/m5.js" => respond(200, "text/javascript; charset=utf-8", M5_JS.as_bytes().to_vec()),
@@ -865,6 +940,38 @@ fn serve(req: Request<Vec<u8>>, dir: &Path) -> Response<Cow<'static, [u8]>> {
         _ => respond(404, "text/plain", vec![]),
     }
 }
+
+/// An open extension popup (the menu an extension shows from its toolbar button).
+struct Popup {
+    view: WebView,
+    id: String,
+    /// Anchor: the button's right edge and the top of the popup (logical px).
+    x: f64,
+    y: f64,
+    n: u64,
+    /// Last size applied (0 until the popup reports its content size).
+    w: f64,
+}
+
+/// Runs in extension popups: reports the content size (they size to fit, as in Chrome) and turns
+/// `window.close()` and Esc into closing the popup.
+const POPUP_INIT: &str = r#"(function(){if(location.protocol!=='chrome-extension:'||window.top!==window)return;const p=o=>{try{window.ipc.postMessage(JSON.stringify(o))}catch(_){}};
+window.close=()=>p({t:'ext_popup_close'});
+let last='';const send=()=>{const b=document.body,d=document.documentElement;if(!b)return;const w=Math.ceil(Math.max(b.scrollWidth,d.scrollWidth,b.offsetWidth)),h=Math.ceil(Math.max(b.scrollHeight,d.scrollHeight,b.offsetHeight));const k=w+'x'+h;if(k!==last){last=k;p({t:'ext_popup_size',w,h})}};
+const go=()=>{send();try{new ResizeObserver(send).observe(document.body)}catch(_){}try{new MutationObserver(send).observe(document.documentElement,{subtree:true,childList:true,attributes:true})}catch(_){}setTimeout(send,150);setTimeout(send,500)};
+if(document.readyState==='loading')addEventListener('DOMContentLoaded',go);else go();
+addEventListener('keydown',e=>{if(e.key==='Escape')p({t:'ext_popup_close'})},true);
+// Every WebView2 page is its own engine "window", so "the active tab in the current window" would be
+// the popup itself. Answer such queries with the Wisp tab the user is looking at, like Chrome does.
+const AU=__AU__;let mine=null;try{chrome.tabs.getCurrent(t=>{mine=t&&t.id})}catch(_){}
+if(AU&&window.chrome&&chrome.tabs&&chrome.tabs.query){const q=chrome.tabs.query.bind(chrome.tabs),K=['active','currentWindow','lastFocusedWindow','highlighted','windowId','windowType','status'];
+ const strip=u=>{try{const x=new URL(u);return x.origin+x.pathname}catch(_){return u||''}};
+ const pick=ts=>{ts=(ts||[]).filter(t=>t.id!==mine);return ts.find(t=>t.url===AU||t.pendingUrl===AU)||ts.find(t=>strip(t.url)===strip(AU))||ts.find(t=>t.url&&strip(t.url).split('/')[2]===strip(AU).split('/')[2])};
+ const real=i=>new Promise(r=>q(i,x=>{void chrome.runtime.lastError;r(x||[])}));
+ chrome.tabs.query=function(info,cb){const want=info&&info.active===true&&(info.currentWindow||info.lastFocusedWindow)&&Object.keys(info).every(k=>K.includes(k));
+  const pr=want?real({}).then(ts=>{const t=pick(ts);return t?[t]:real(info)}):real(info);
+  if(typeof cb==='function'){pr.then(cb);return}return pr}}
+})()"#;
 
 /// A page webview plus the shared handles its callbacks use. `tid` is shared so a pre-warmed
 /// spare "New Tab" view can be handed to whichever tab asks for it first.
@@ -936,6 +1043,17 @@ struct App {
     nonce: String,
     last_sel: Instant,
     glass_ok: bool,
+    /// Installed Chrome extensions (extensions.json).
+    exts: Vec<extensions::Ext>,
+    /// Per space (profile): the extension stamps already loaded into its engine.
+    ext_seen: HashMap<usize, HashMap<String, u64>>,
+    /// Downloaded extensions waiting for the user to confirm the install.
+    ext_stage: HashMap<String, (extensions::Ext, std::path::PathBuf)>,
+    /// Extensions being downloaded.
+    ext_busy: HashSet<String>,
+    /// The open extension popup.
+    ext_popup: Option<Popup>,
+    ext_popup_n: u64,
 }
 
 impl App {
@@ -1023,7 +1141,8 @@ impl App {
             &css,
             self.blocker.enabled.load(Ordering::Relaxed),
             &self.settings.block_off,
-        );
+        )
+        .replace("__EXTS__", &json!(self.exts.iter().map(|e| &e.id).collect::<Vec<_>>()).to_string());
         let (https, tbn) = (self.https.clone(), tb.clone());
         let backdrop = if self.light() { (255, 255, 255, 255) } else { (23, 23, 31, 255) };
         // A New Tab page gets its space's wallpaper, widgets and theme before it first draws.
@@ -1104,6 +1223,11 @@ impl App {
                 {
                     blocker::attach(&view, tb.clone());
                     attach_fullscreen(&view, self.proxy.clone(), tidc.clone());
+                }
+                // The first page of a space brings its engine profile up to date with the
+                // installed extensions.
+                if !self.ext_seen.contains_key(&sid) {
+                    self.ext_sync_view(sid, &view);
                 }
                 Some(Built {
                     view,
@@ -1195,6 +1319,7 @@ impl App {
             self.spare_vis = true;
             self.spare_at = Some(rect);
             raise_chrome(&self.chrome);
+            self.raise_popup();
         }
     }
 
@@ -1344,6 +1469,7 @@ impl App {
 
     fn update_chrome_shape(&mut self, cuts: Vec<R>, round: bool) {
         raise_chrome(&self.chrome);
+        self.raise_popup();
         let (w, h) = self.size();
         let sig = format!("{cuts:?}{round}{:?}{w}x{h}", self.holes);
         if sig == self.chrome_shape {
@@ -1618,6 +1744,7 @@ impl App {
                  "hibernate_s":self.settings.hibernate_s,"shortcuts":self.settings.shortcuts,"auto_update":self.settings.auto_update,
                  "channel":self.settings.channel,"block_off":self.settings.block_off},
             "page":page,
+            "exts":self.ext_items(),
             "update":{"ready":self.update_ready},
             "dls":self.downloads.iter().rev().take(30).collect::<Vec<_>>(),
             "filters":{"rules":self.blocker.engine.read().unwrap().rule_count,"total":self.blocker.total.load(Ordering::Relaxed)}});
@@ -1725,6 +1852,7 @@ impl App {
     }
 
     fn select(&mut self, id: usize) {
+        self.ext_popup_close();
         let s = self.space_mut();
         if !s.tabs.iter().any(|t| t.id == id) {
             return;
@@ -1925,8 +2053,19 @@ impl App {
         let n = |k: &str| m[k].as_u64().unwrap_or(0) as usize;
         let t = m["t"].as_str().unwrap_or("");
         // Web pages may only send focus / shortcut messages.
-        if !trusted && !matches!(t, "focus" | "key" | "ai_sel") {
+        if !trusted && !matches!(t, "focus" | "key" | "ai_sel" | "ext_add") {
             return;
+        }
+        // Web pages may only ask to add an extension from the Chrome Web Store's own pages (the
+        // "Add to Wisp" button there); the user still confirms in Wisp's own dialog.
+        if !trusted && t == "ext_add" {
+            let on_store = from
+                .and_then(|id| self.find_tab(id))
+                .map(|(si, ti)| self.spaces[si].tabs[ti].url.starts_with(&format!("{STORE}/")))
+                .unwrap_or(false);
+            if !on_store || s("n") != self.nonce {
+                return;
+            }
         }
         match t {
             "holes" => {
@@ -2161,6 +2300,95 @@ impl App {
                 let text: String = s("text").chars().take(6000).collect();
                 self.ai_emit(json!({"type":"selection","mode":s("mode"),"text":text}));
             }
+            "ext_add" => {
+                let input = if m["id"].is_string() { s("id") } else { s("input") };
+                match extensions::id_from_input(&input) {
+                    Some(id) => self.ext_add(&id),
+                    None => {
+                        self.toast("Paste a Chrome Web Store link or a 32-letter extension ID");
+                        self.ext_emit();
+                    }
+                }
+            }
+            "ext_confirm" => self.ext_confirm(&s("id"), m["ok"].as_bool().unwrap_or(false)),
+            "ext_list" => self.ext_emit(),
+            "ext_toggle" => {
+                let id = s("id");
+                if let Some(e) = self.exts.iter_mut().find(|e| e.id == id) {
+                    e.enabled = m["on"].as_bool().unwrap_or(!e.enabled);
+                }
+                self.ext_popup_close();
+                self.ext_changed();
+            }
+            "ext_pin" => {
+                let id = s("id");
+                let pins = &mut self.settings.ext_pins;
+                if pins.contains(&id) {
+                    pins.retain(|x| x != &id);
+                } else {
+                    pins.push(id);
+                }
+                store::save_settings(&self.settings);
+                self.ext_emit();
+            }
+            "ext_remove" => {
+                let id = s("id");
+                if let Some(i) = self.exts.iter().position(|e| e.id == id) {
+                    let e = self.exts.remove(i);
+                    self.settings.ext_pins.retain(|x| x != &id);
+                    store::save_settings(&self.settings);
+                    self.ext_popup_close();
+                    self.ext_changed();
+                    // The engine lets go of the files once the extension is unloaded.
+                    std::thread::spawn(move || {
+                        std::thread::sleep(Duration::from_millis(2000));
+                        extensions::delete_files(&id);
+                    });
+                    self.toast(&format!("Removed {}", e.name));
+                }
+            }
+            "ext_update" => {
+                let id = s("id");
+                if self.exts.iter().any(|e| e.id == id) {
+                    self.ext_add(&id);
+                }
+            }
+            "ext_options" => {
+                let id = s("id");
+                if let Some(e) = self.exts.iter().find(|e| e.id == id && !e.options.is_empty()) {
+                    let u = format!("chrome-extension://{}/{}", e.id, e.options);
+                    self.ext_popup_close();
+                    self.open_tab(&u, false);
+                }
+            }
+            "ext_details" => {
+                let id = s("id");
+                if extensions::valid_id(&id) {
+                    self.ext_popup_close();
+                    self.open_tab(&format!("{STORE}/detail/{id}"), false);
+                }
+            }
+            "ext_store" => {
+                let q = s("q");
+                let u = if q.trim().is_empty() {
+                    format!("{STORE}/category/extensions")
+                } else {
+                    let enc: String = url::form_urlencoded::byte_serialize(q.trim().as_bytes()).collect();
+                    format!("{STORE}/search/{enc}")
+                };
+                self.ext_popup_close();
+                self.open_tab(&u, false);
+            }
+            "ext_manage" => {
+                self.ext_popup_close();
+                let existing = self.space().tabs.iter().find(|t| t.url == EXT_ID).map(|t| t.id);
+                match existing {
+                    Some(id) => self.select(id),
+                    None => self.open_tab(EXT_ID, false),
+                }
+            }
+            "ext_popup" => self.ext_popup_open(&s("id"), m["x"].as_f64().unwrap_or(0.0), m["y"].as_f64().unwrap_or(0.0)),
+            "ext_popup_close" => self.ext_popup_close(),
             "open" => {
                 let u = s("url");
                 if u.starts_with("https://") || u.starts_with("http://") {
@@ -2174,6 +2402,7 @@ impl App {
             }
             "nt_ready" => self.push_nt(),
             "focus" => {
+                self.ext_popup_close();
                 if !self.holes.is_empty() {
                     self.chrome_emit(json!({"type":"pageclick"}));
                 }
@@ -2489,6 +2718,330 @@ impl App {
 
     fn toast(&self, text: &str) {
         self.chrome_emit(json!({"type":"toast","text":text}));
+    }
+
+    // ---- Chrome extensions ----
+    fn ext_items(&self) -> Value {
+        json!(self
+            .exts
+            .iter()
+            .map(
+                |e| json!({"id":e.id,"name":e.name,"version":e.version,"description":e.description,"enabled":e.enabled,
+                "icon":if e.icon.is_empty() { Value::Null } else { json!(format!("/ext/{}/{}", e.id, e.icon)) },
+                "popup":!e.popup.is_empty(),"options":!e.options.is_empty(),"warnings":e.warnings,
+                "pinned":self.settings.ext_pins.contains(&e.id)})
+            )
+            .collect::<Vec<_>>())
+    }
+
+    fn ext_payload(&self) -> Value {
+        json!({"items":self.ext_items(),"busy":self.ext_busy.iter().collect::<Vec<_>>(),"private":store::is_private(),
+               "theme":{"accent":self.settings.accent,"light":self.settings.light,"flat":!self.glass(),"font":self.settings.font}})
+    }
+
+    /// Tell everything that shows extensions: the chrome (toolbar, menus, Settings), the
+    /// Extensions page, and the "Add to Wisp" buttons on Chrome Web Store pages.
+    fn ext_emit(&mut self) {
+        let payload = self.ext_payload();
+        let ids = json!(self.exts.iter().map(|e| &e.id).collect::<Vec<_>>());
+        for s in &self.spaces {
+            for t in &s.tabs {
+                let Some(v) = &t.view else { continue };
+                if t.url == EXT_ID {
+                    let _ = v.evaluate_script(&format!("window.wispExt&&window.wispExt({payload})"));
+                } else if t.url.starts_with(STORE) {
+                    let _ = v.evaluate_script(&format!("window.__wispStore&&window.__wispStore({ids})"));
+                }
+            }
+        }
+        self.push_state();
+    }
+
+    fn ext_want(&self) -> Vec<(String, std::path::PathBuf, bool, u64)> {
+        self.exts
+            .iter()
+            .map(|e| (e.id.clone(), extensions::dir_of(&e.id), e.enabled, e.stamp))
+            .collect()
+    }
+
+    /// Bring one profile's engine in line with the installed extensions (through `view`, any page
+    /// of that profile). Returns whether the request went through.
+    #[cfg(windows)]
+    fn ext_sync_one(&self, sid: usize, view: &WebView) -> bool {
+        if store::is_private() {
+            return false;
+        }
+        let p = self.proxy.clone();
+        extensions::sync_profile(
+            view,
+            self.ext_want(),
+            self.ext_seen.get(&sid).cloned().unwrap_or_default(),
+            Box::new(move |id| {
+                let _ = p.send_event(Ev::ExtLoadErr(id));
+            }),
+        )
+    }
+    #[cfg(not(windows))]
+    fn ext_sync_one(&self, _sid: usize, _view: &WebView) -> bool {
+        false
+    }
+
+    fn ext_stamps(&self) -> HashMap<String, u64> {
+        self.exts.iter().map(|e| (e.id.clone(), e.stamp)).collect()
+    }
+
+    fn ext_sync_view(&mut self, sid: usize, view: &WebView) {
+        if self.ext_sync_one(sid, view) {
+            let st = self.ext_stamps();
+            self.ext_seen.insert(sid, st);
+        }
+    }
+
+    /// Sync every profile that has a page open; the others sync when their first page opens.
+    fn ext_sync_all(&mut self) {
+        let mut done = vec![];
+        let mut idle = vec![];
+        for s in &self.spaces {
+            let view = s
+                .tabs
+                .iter()
+                .find_map(|t| t.view.as_ref())
+                .or_else(|| self.spare.as_ref().filter(|(sid, _)| *sid == s.id).map(|(_, b)| &b.view));
+            match view {
+                Some(v) => {
+                    if self.ext_sync_one(s.id, v) {
+                        done.push(s.id);
+                    }
+                }
+                None => idle.push(s.id),
+            }
+        }
+        let st = self.ext_stamps();
+        for sid in done {
+            self.ext_seen.insert(sid, st.clone());
+        }
+        for sid in idle {
+            self.ext_seen.remove(&sid);
+        }
+    }
+
+    fn ext_changed(&mut self) {
+        extensions::save(&self.exts);
+        self.ext_sync_all();
+        self.ext_emit();
+    }
+
+    /// Start downloading an extension from the Chrome Web Store (install or update).
+    fn ext_add(&mut self, id: &str) {
+        if store::is_private() {
+            self.toast("Extensions are off in private windows");
+            return;
+        }
+        if self.ext_stage.contains_key(id) {
+            // Already downloaded and waiting for an answer: ask again.
+            if let Some((e, stage)) = self.ext_stage.get(id) {
+                let icon = extensions::icon_data_url(stage, &e.icon);
+                let upd = self.exts.iter().any(|x| x.id == id);
+                self.chrome_emit(json!({"type":"ext_confirm","id":id,"name":e.name,"icon":icon,"warnings":e.warnings,"update":upd}));
+            }
+            return;
+        }
+        if !self.ext_busy.insert(id.to_string()) {
+            return;
+        }
+        let update = self.exts.iter().any(|e| e.id == id);
+        let (p, id2) = (self.proxy.clone(), id.to_string());
+        std::thread::spawn(move || {
+            let r = extensions::fetch(&id2);
+            let _ = p.send_event(Ev::ExtFetched(id2, Box::new(r)));
+        });
+        self.toast(if update {
+            "Checking for an update…"
+        } else {
+            "Getting the extension from the Chrome Web Store…"
+        });
+        self.ext_emit();
+    }
+
+    fn ext_fetched(&mut self, id: &str, r: Result<(extensions::Ext, std::path::PathBuf), String>) {
+        self.ext_busy.remove(id);
+        match r {
+            Err(e) => {
+                self.toast(&e);
+                self.ext_emit();
+            }
+            Ok((ext, stage)) => {
+                let old = self.exts.iter().find(|e| e.id == id).cloned();
+                if let Some(old) = &old {
+                    if old.version == ext.version {
+                        let _ = fs::remove_dir_all(&stage);
+                        self.toast(&format!("{} is up to date ({})", old.name, old.version));
+                        self.ext_emit();
+                        return;
+                    }
+                    // Updates install silently unless they ask for more than before, like Chrome.
+                    if ext.warnings.iter().all(|w| old.warnings.contains(w)) {
+                        self.ext_install(ext, stage);
+                        return;
+                    }
+                }
+                let icon = extensions::icon_data_url(&stage, &ext.icon);
+                self.chrome_emit(
+                    json!({"type":"ext_confirm","id":id,"name":ext.name,"icon":icon,"warnings":ext.warnings,"update":old.is_some()}),
+                );
+                if let Some((_, prev)) = self.ext_stage.insert(id.to_string(), (ext, stage.clone())) {
+                    if prev != stage {
+                        let _ = fs::remove_dir_all(prev);
+                    }
+                }
+                self.window.set_minimized(false);
+                self.window.set_focus();
+                self.ext_emit();
+            }
+        }
+    }
+
+    fn ext_confirm(&mut self, id: &str, ok: bool) {
+        let Some((ext, stage)) = self.ext_stage.remove(id) else { return };
+        if ok {
+            self.ext_install(ext, stage);
+        } else {
+            let _ = fs::remove_dir_all(&stage);
+            self.ext_emit();
+        }
+    }
+
+    fn ext_install(&mut self, mut ext: extensions::Ext, stage: std::path::PathBuf) {
+        if let Err(e) = extensions::commit(&stage, &ext.id) {
+            let _ = fs::remove_dir_all(&stage);
+            self.toast(&format!("Couldn't install {}: {e}", ext.name));
+            self.ext_emit();
+            return;
+        }
+        let msg = match self.exts.iter_mut().find(|e| e.id == ext.id) {
+            Some(old) => {
+                ext.enabled = old.enabled;
+                *old = ext.clone();
+                format!("{} updated to {}", ext.name, ext.version)
+            }
+            None => {
+                self.exts.push(ext.clone());
+                format!("{} added. It's under the Extensions button next to the menu.", ext.name)
+            }
+        };
+        self.ext_changed();
+        self.toast(&msg);
+    }
+
+    /// Show an extension's popup under its toolbar button (anchored at `x` = the button's right
+    /// edge, `y` = just below it). Clicking the same extension again closes it.
+    fn ext_popup_open(&mut self, id: &str, x: f64, y: f64) {
+        let same = self.ext_popup.as_ref().is_some_and(|p| p.id == id);
+        self.ext_popup_close();
+        if same {
+            return;
+        }
+        let Some(e) = self.exts.iter().find(|e| e.id == id && e.enabled).cloned() else {
+            return;
+        };
+        if e.popup.is_empty() {
+            if !e.options.is_empty() {
+                self.open_tab(&format!("chrome-extension://{}/{}", e.id, e.options), false);
+            } else {
+                self.toast(&format!("{} has no menu. It works by itself on the pages it supports.", e.name));
+            }
+            return;
+        }
+        let sid = self.space().id;
+        if !self.ext_seen.contains_key(&sid) {
+            self.ext_sync_all();
+        }
+        let active_url = {
+            let sp = self.space();
+            sp.tabs
+                .iter()
+                .find(|t| t.id == sp.active)
+                .map(|t| real(&t.url))
+                .filter(|u| !u.starts_with(BASE))
+                .unwrap_or_default()
+        };
+        // Extensions ask the engine for "the active tab in the last focused window". Each page is
+        // its own engine window, so give the page the user is on focus and open the popup without
+        // taking it (a click into the popup focuses it as usual).
+        if let Some(v) = self.active_view() {
+            let _ = v.focus();
+        }
+        let dir = store::data_dir();
+        let backdrop = if self.light() { (255, 255, 255, 255) } else { (30, 30, 42, 255) };
+        let (p1, p2) = (self.proxy.clone(), self.proxy.clone());
+        self.ext_popup_n += 1;
+        let n = self.ext_popup_n;
+        let ctx = self
+            .ctxs
+            .entry(sid)
+            .or_insert_with(|| WebContext::new(Some(dir.join(format!("profile-{sid}")))));
+        let built = base_builder(&self.window)
+            .with_web_context(ctx)
+            .with_bounds(to_rect(R {
+                x: (x - 25.0).max(0.0),
+                y,
+                w: 25.0,
+                h: 25.0,
+            }))
+            .with_background_color(backdrop)
+            .with_focused(false)
+            .with_initialization_script(&POPUP_INIT.replace("__AU__", &json!(active_url).to_string()))
+            .with_ipc_handler(move |req| {
+                let _ = p1.send_event(Ev::PopupIpc(req.into_body()));
+            })
+            .with_new_window_req_handler(move |u| {
+                let _ = p2.send_event(Ev::NewWindow(u));
+                false
+            })
+            .with_url(format!("chrome-extension://{}/{}", e.id, e.popup))
+            .build();
+        match built {
+            Ok(view) => {
+                stack_view(&view, true);
+                self.ext_popup = Some(Popup {
+                    view,
+                    id: id.to_string(),
+                    x,
+                    y,
+                    n,
+                    w: 0.0,
+                });
+                self.later(800, Ev::PopupFallback(n));
+                self.chrome_emit(json!({"type":"ext_popup","id":id}));
+            }
+            Err(err) => self.toast(&format!("Couldn't open {}: {err}", e.name)),
+        }
+    }
+
+    /// Size the popup to its content (Chrome's limits: 25×25 to 800×600) and keep it on screen.
+    fn ext_popup_size(&mut self, w: f64, h: f64) {
+        let (ww, wh) = self.size();
+        let Some(p) = self.ext_popup.as_mut() else { return };
+        let w = w.clamp(25.0, 800.0).min(ww - 16.0);
+        let h = h.clamp(25.0, 600.0).min(wh - p.y - 8.0).max(25.0);
+        let x = (p.x - w).clamp(8.0, (ww - w - 8.0).max(8.0));
+        p.w = w;
+        let _ = p.view.set_bounds(to_rect(R { x, y: p.y, w, h }));
+    }
+
+    fn ext_popup_close(&mut self) {
+        if let Some(p) = self.ext_popup.take() {
+            let _ = p.view.set_visible(false);
+            self.bury(p.view);
+            self.chrome_emit(json!({"type":"ext_popup","id":null}));
+        }
+    }
+
+    /// Keep the popup above the chrome, which is raised whenever pages are restacked.
+    fn raise_popup(&self) {
+        if let Some(p) = &self.ext_popup {
+            stack_view(&p.view, true);
+        }
     }
 
     fn chrome_emit(&self, v: Value) {
@@ -3157,6 +3710,25 @@ impl App {
                 self.push_state();
             }
             Ev::NewWindow(u) => self.open_tab(&u, false),
+            Ev::ExtFetched(id, r) => self.ext_fetched(&id, *r),
+            Ev::ExtLoadErr(id) => {
+                let n = self.exts.iter().find(|e| e.id == id).map(|e| e.name.clone()).unwrap_or(id);
+                self.toast(&format!("{n} couldn't be loaded by the engine"));
+            }
+            Ev::PopupIpc(b) => {
+                let Ok(m) = serde_json::from_str::<Value>(&b) else { return };
+                match m["t"].as_str().unwrap_or("") {
+                    "ext_popup_size" => self.ext_popup_size(m["w"].as_f64().unwrap_or(0.0), m["h"].as_f64().unwrap_or(0.0)),
+                    "ext_popup_close" => self.ext_popup_close(),
+                    _ => {}
+                }
+            }
+            Ev::PopupFallback(n) => {
+                // No usable size yet (fluid layout, or the page can't message Wisp): Chrome's default.
+                if self.ext_popup.as_ref().is_some_and(|p| p.n == n && p.w < 60.0) {
+                    self.ext_popup_size(380.0, 580.0);
+                }
+            }
             Ev::Show => self.show_window(),
             Ev::AiGo(id, pages) => self.ai_go(&id, pages),
             Ev::AiDelta(id, text) => {
@@ -3552,7 +4124,20 @@ fn main() {
         nonce: make_nonce(),
         last_sel: Instant::now() - Duration::from_secs(5),
         glass_ok: false,
+        exts: if private { vec![] } else { extensions::load() },
+        ext_seen: HashMap::new(),
+        ext_stage: HashMap::new(),
+        ext_busy: HashSet::new(),
+        ext_popup: None,
+        ext_popup_n: 0,
     };
+    if !private {
+        let list = app.exts.clone();
+        std::thread::spawn(move || {
+            extensions::cleanup();
+            extensions::refresh_compat(&list);
+        });
+    }
     app.glass_ok = set_backdrop(&app.window, app.settings.glass_on, !app.light());
 
     {
