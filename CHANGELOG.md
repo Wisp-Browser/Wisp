@@ -6,6 +6,24 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.10-beta.3] - 2026-11-21
+
+### Fixed
+- Closing the last tab (or opening one) no longer flashes a dark, empty page before the New Tab page
+  appears. The ready-made page used to be parked off-screen, where Windows doesn't draw it at all, so
+  it was still blank when it moved into place. It now waits, already drawn, right behind the current page.
+  - The same goes for any page that is still loading: it draws behind the page you're on, then comes
+    to the front in one step.
+  - Closing or opening tabs very quickly keeps the last page up until the next one is ready, instead
+    of a blank gap.
+  - The New Tab page appears complete, with its stars already in place, instead of fading in.
+- The ⋯ menu's items now light up when you point at them (and when pressed or reached with the
+  keyboard), like the other buttons. The highlight was being cancelled by another style.
+- Esc in the address bar puts back the page's address, like in Chrome (press it again to leave the
+  bar). Before, what you had typed stayed there.
+- Light wallpapers: the stars and particles are drawn dark so you can see them, and the name of a
+  light wallpaper in the gallery is readable.
+
 ## [0.2.10-beta.2] - 2026-11-20
 
 ### Fixed

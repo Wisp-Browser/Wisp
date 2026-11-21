@@ -245,6 +245,8 @@ struct Tab {
     /// Visibility and bounds last applied to the view, so unchanged pages aren't touched again.
     vis: Option<bool>,
     at: Option<R>,
+    /// The view was raised above the other pages since it last came on screen.
+    top: bool,
     opened: bool,
     ready: bool,
     block: Option<Arc<blocker::TabBlock>>,
@@ -267,6 +269,7 @@ impl Tab {
             scroll: 0.0,
             vis: None,
             at: None,
+            top: false,
             opened: false,
             ready: false,
             block: None,
@@ -579,6 +582,29 @@ fn raise_chrome(chrome: &WebView) {
 #[cfg(not(windows))]
 fn raise_chrome(_chrome: &WebView) {}
 
+/// Put a page view above (`top`) or below every other page. A page that is still getting ready
+/// sits in its real place underneath the current one: WebView2 treats a view parked off-screen
+/// as hidden and doesn't paint it (or run its animations) at all, so moving one into place used to
+/// show a few blank frames before it drew.
+#[cfg(windows)]
+fn stack_view(v: &WebView, top: bool) {
+    use windows::Win32::{
+        Foundation::HWND,
+        UI::WindowsAndMessaging::{SetWindowPos, HWND_BOTTOM, HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE},
+    };
+    use wry::WebViewExtWindows;
+    // SAFETY: z-order change of the page's own host window.
+    unsafe {
+        let mut hwnd = HWND::default();
+        if v.controller().ParentWindow(&mut hwnd).is_ok() {
+            let at = if top { HWND_TOP } else { HWND_BOTTOM };
+            let _ = SetWindowPos(hwnd, at, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+        }
+    }
+}
+#[cfg(not(windows))]
+fn stack_view(_v: &WebView, _top: bool) {}
+
 /// Non-Windows builds exist only so CI can compile and test the shared logic.
 #[cfg(not(windows))]
 fn shape_chrome(_chrome: &WebView, _w: f64, _h: f64, _scale: f64, _cuts: &[R], _round: bool, _holes: &[(R, f64)]) {}
@@ -873,6 +899,9 @@ struct App {
     rapid: bool,
     build_due: bool,
     spare: Option<(usize, Built)>,
+    /// The spare page is shown (underneath the current page).
+    spare_vis: bool,
+    spare_at: Option<R>,
     last_state: String,
     update_ready: Option<String>,
     checking: bool,
@@ -1127,6 +1156,7 @@ impl App {
             t.view = Some(b.view);
             t.vis = None;
             t.at = None;
+            t.top = false;
             t.block = Some(b.block);
             t.opened = true;
             t.ready = ready;
@@ -1148,25 +1178,35 @@ impl App {
     /// Keep one hidden, already-loaded New Tab page around so opening a tab (or closing the last
     /// one) doesn't wait for a webview to be created.
     fn make_spare(&mut self, sid: usize) {
-        if self.spare.is_some() || sid != self.spaces[self.cur].id || !self.overlays.is_empty() {
+        if self.spare.is_some() || sid != self.spaces[self.cur].id || !self.overlays.is_empty() || self.dragging {
             return;
         }
         let Some(si) = self.spaces.iter().position(|s| s.id == sid) else {
             return;
         };
-        let rect = self.content();
+        let rect = self.spare_rect();
         if let Some(b) = self.build_view(si, 0, "wisp://newtab#spare", rect) {
-            // "Visible" but parked far off-screen: it paints its first frame now, so adopting it
-            // later shows a finished page instantly. Its animations stay paused until adoption.
-            let _ = b.view.set_bounds(to_rect(R {
-                x: -6000.0,
-                y: -6000.0,
-                w: rect.w,
-                h: rect.h,
-            }));
+            // Visible in the page area but underneath every other page (the chrome covers the
+            // rest): it really paints now, so adopting it later shows a finished page instantly.
+            // Off-screen would not do: WebView2 doesn't draw a view it can't see on any monitor.
+            stack_view(&b.view, false);
             let _ = b.view.set_visible(true);
             self.spare = Some((sid, b));
+            self.spare_vis = true;
+            self.spare_at = Some(rect);
+            raise_chrome(&self.chrome);
         }
+    }
+
+    /// Where the spare page waits: exactly behind the active page, so it is always covered.
+    fn spare_rect(&self) -> R {
+        let r = self.content();
+        if self.page_full() {
+            return r;
+        }
+        let s = &self.spaces[self.cur];
+        let (ids, rects) = s.visible(r);
+        ids.iter().position(|id| *id == s.active).map_or(r, |i| rects[i])
     }
 
     fn drop_spare(&mut self) {
@@ -1197,11 +1237,15 @@ impl App {
         }
         // While a brand-new page is still loading, keep showing whatever was on screen before
         // instead of flashing an empty window.
+        // That includes a page whose building was put off because tabs are being opened or closed
+        // quickly (`build_due`): until it exists, the closed page stays up instead of a blank gap.
+        let build_due = self.build_due;
         let hold = show
             && self.spaces[cur]
                 .tabs
                 .iter()
-                .any(|t| ids.contains(&t.id) && t.view.is_some() && !t.ready);
+                .any(|t| ids.contains(&t.id) && if t.view.is_some() { !t.ready } else { build_due });
+        let mut restack_spare = false;
         // Two passes: show the pages that should be on screen first, then hide the rest, so there
         // is never a moment with no page showing (the window background would flash through).
         for pass in [true, false] {
@@ -1215,21 +1259,20 @@ impl App {
                     }
                     match idx {
                         Some(i) if show => {
-                            // A page that hasn't painted yet renders off-screen (the page before it
-                            // stays up meanwhile, see `hold`), then moves into place in one step:
-                            // no blank frame in between.
-                            let target = if t.ready {
-                                rects[i]
-                            } else {
-                                R {
-                                    x: -6000.0,
-                                    y: -6000.0,
-                                    ..rects[i]
-                                }
-                            };
+                            // A page that hasn't painted yet renders in place but underneath the
+                            // page before it (which stays up meanwhile, see `hold`), then comes to
+                            // the front in one step: no blank frame in between.
+                            let target = rects[i];
                             if t.at != Some(target) {
                                 let _ = v.set_bounds(to_rect(target));
                                 t.at = Some(target);
+                            }
+                            if t.ready && !t.top {
+                                stack_view(v, true);
+                                t.top = true;
+                            } else if !t.ready && t.vis != Some(true) {
+                                stack_view(v, false);
+                                restack_spare = true;
                             }
                             if t.vis != Some(true) {
                                 let _ = v.set_visible(true);
@@ -1244,6 +1287,7 @@ impl App {
                             if !hold && t.vis != Some(false) {
                                 let _ = v.set_visible(false);
                                 t.vis = Some(false);
+                                t.top = false;
                                 // Hidden pages drop caches and trim their memory right away.
                                 if !t.low && t.ready {
                                     t.low = true;
@@ -1253,6 +1297,22 @@ impl App {
                         }
                     }
                 }
+            }
+        }
+        // The spare New Tab page waits underneath everything, and is hidden with the pages (the
+        // chrome can be see-through where they would be).
+        let spare_r = self.spare_rect();
+        if let Some((_, b)) = &self.spare {
+            if show && self.spare_at != Some(spare_r) {
+                let _ = b.view.set_bounds(to_rect(spare_r));
+                self.spare_at = Some(spare_r);
+            }
+            if restack_spare {
+                stack_view(&b.view, false);
+            }
+            if self.spare_vis != show {
+                let _ = b.view.set_visible(show);
+                self.spare_vis = show;
             }
         }
         if !hold && self.graveyard_hidden < self.graveyard.len() {
@@ -3458,6 +3518,8 @@ fn main() {
         rapid: false,
         build_due: false,
         spare: None,
+        spare_vis: false,
+        spare_at: None,
         last_state: String::new(),
         update_ready: None,
         checking: false,

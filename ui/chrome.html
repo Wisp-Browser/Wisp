@@ -380,6 +380,9 @@ $('#url').addEventListener('keydown',e=>{if(e.key==='Enter'){let v=e.target.valu
   if(e.ctrlKey&&v&&!/[\s.\/:]/.test(v))v='https://www.'+v+'.com';
   send({t:'go',input:v});e.target.blur()}});
 $('#url').addEventListener('focus',e=>e.target.select());
+// Esc, like Chrome: put back the page's address (dropping what was typed); again to leave the bar.
+$('#url').addEventListener('keydown',e=>{if(e.key!=='Escape')return;const a=S.tabs&&S.tabs.find(t=>t.id===S.active),addr=a&&a.url!=='wisp://newtab'?a.url:'';
+  if(e.target.value!==addr){e.target.value=addr;e.target.select();omniIcon(a)}else e.target.blur()});
 $('#new').onclick=$('#newh').onclick=()=>send({t:'new'});$('#back').onclick=()=>send({t:'back'});$('#fwd').onclick=()=>send({t:'fwd'});$('#rel').onclick=()=>send({t:'reload'});
 $('#aibtn').onclick=()=>AI.toggle();$('#unsplit').onclick=()=>send({t:'unsplit'});
 $('#sidetog').onclick=()=>send({t:'set',k:'side_collapsed',v:!S.collapsed});

@@ -22,12 +22,17 @@ body.private #tint{background:color-mix(in srgb,#7c4dff 14%,var(--frame))}
 #pop{min-width:240px;max-width:300px;transform-origin:top right}
 #pop h4,.mh4{margin:4px 10px 6px;font-size:12px;font-weight:600;color:var(--fg2)}
 #pop h4{font-size:13px;color:var(--fg)}
-.menu button,#pop .menu button{display:flex;align-items:center;gap:10px;width:100%;height:34px;border:0;border-radius:10px;background:none;padding:0 10px;text-align:left;color:var(--fg);transition:background-color var(--dur-s) var(--ease)}
-.menu button .i{color:var(--fg2)}
+.menu button,#pop .menu button{display:flex;align-items:center;gap:10px;width:100%;height:34px;border:0;border-radius:10px;background:none;padding:0 10px;text-align:left;color:var(--fg);outline:0;transition:background-color var(--dur-s) var(--ease)}
+.menu button .i{color:var(--fg2);transition:color var(--dur-s) var(--ease)}
 .menu button span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .menu button small{color:var(--fg2);font-size:11px;display:flex}.menu button small .i{width:14px;height:14px}
-.menu button:hover{background:var(--hover)}.menu button.danger:hover{background:color-mix(in srgb,var(--danger) 16%,transparent)}
-.menu button.on{background:var(--hover)}
+/* #pop is listed too: its base rule above is more specific than a bare .menu one, which used to
+   cancel the highlight in the ⋯ menu. Rows light up like the toolbar buttons (and brighten their icon). */
+.menu button:hover,.menu button:focus-visible,#pop .menu button:hover,#pop .menu button:focus-visible,.menu button.on,#pop .menu button.on{background:var(--hover)}
+.menu button:hover .i,.menu button:focus-visible .i{color:var(--fg)}
+.menu button:active,#pop .menu button:active{background:var(--press)}
+.menu button.danger:hover,.menu button.danger:focus-visible{background:color-mix(in srgb,var(--danger) 16%,transparent)}
+.menu button.danger:active{background:color-mix(in srgb,var(--danger) 24%,transparent)}
 .msep{height:1px;background:var(--line);margin:5px 8px}
 /* find bar floats over the top-right of the page */
 #findbar{top:calc(var(--ct) + 10px);right:calc(var(--rt) + 12px);width:min(400px,calc(100vw - 40px));height:44px;border-radius:var(--pill);padding:0 5px 0 14px;align-items:center;gap:4px;transform-origin:top right}

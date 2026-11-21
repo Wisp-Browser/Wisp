@@ -104,7 +104,7 @@ function build(){
  // suggestions on the address bar
  const u=$('#url');u.addEventListener('input',()=>requestSugg(),true);
  u.addEventListener('keydown',e=>{if(!sg.open)return;if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();e.stopImmediatePropagation();moveSugg(e.key==='ArrowDown'?1:-1)}
-  else if(e.key==='Enter'&&sg.sel>=0){e.preventDefault();e.stopImmediatePropagation();pickSugg(sg.rows[sg.sel]);u.blur()}else if(e.key==='Escape'){closeSugg();u.blur()}},true);
+  else if(e.key==='Enter'&&sg.sel>=0){e.preventDefault();e.stopImmediatePropagation();pickSugg(sg.rows[sg.sel]);u.blur()}else if(e.key==='Escape')closeSugg()},true);
  u.addEventListener('blur',()=>setTimeout(closeSugg,150));
  watchHoles();booted=true}
 // Popups that hang off a control follow it when the layout changes.
