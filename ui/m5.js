@@ -25,6 +25,10 @@ function watchHoles(){const mo=new MutationObserver(syncHoles),ro=new ResizeObse
  mo.observe($('#toasts'),{childList:true});addEventListener('resize',syncHoles)}
 const refreshInset=syncHoles,inset=()=>{};
 const cur=()=>S&&S.tabs.find(t=>t.id===S.active);
+// Select the address bar, with the keyboard (Wisp moves it here from the page first).
+// Pages being shown or hidden can take the keyboard back for a moment, so check again briefly.
+function focusUrl(){const u=$('#url'),grab=()=>{act('chrome_focus');u.focus();u.select()};grab();
+ [80,250,500,900].forEach(ms=>setTimeout(()=>{if(document.activeElement===u&&!document.hasFocus()&&!u.value)grab()},ms))}
 
 // ---------- commands + shortcuts ----------
 // Shortcuts follow Chrome's. A command can have several keys, separated by "|"; the first is the
@@ -34,7 +38,7 @@ const CMDS=[
  ['reopen','Reopen closed tab','ctrl+shift+t',()=>act('reopen')],
  ['reload','Reload page','ctrl+r|f5',()=>act('reload')],['hardreload','Reload, ignoring the cache','ctrl+shift+r|shift+f5|ctrl+f5',()=>act('hard_reload')],
  ['back','Back','alt+left',()=>act('back')],['fwd','Forward','alt+right',()=>act('fwd')],['home','Open the New Tab page here','alt+home',()=>act('home')],
- ['address','Focus address bar','ctrl+l|alt+d|f6|ctrl+e',()=>{$('#url').focus();$('#url').select()}],
+ ['address','Focus address bar','ctrl+l|alt+d|f6|ctrl+e',()=>focusUrl()],
  ['palette','Command palette and tab search','ctrl+k|ctrl+shift+a',()=>palette(true)],['ai','Toggle Wisp AI','ctrl+shift+space',()=>window.AI&&AI.toggle()],
  ['find','Find in page','ctrl+f',()=>openFind()],['findnext','Find next','f3|ctrl+g',()=>findStep('next')],['findprev','Find previous','shift+f3|ctrl+shift+g',()=>findStep('prev')],
  ['zoomin','Zoom in','ctrl+=|ctrl+shift+=',()=>act('zoom',{d:1})],['zoomout','Zoom out','ctrl+-',()=>act('zoom',{d:-1})],['zoomreset','Reset zoom','ctrl+0',()=>act('zoom',{d:0})],
@@ -352,5 +356,5 @@ function event(e){switch(e.type){
  case'ext_confirm':closePop();extConfirm(e);break;
  case'ext_popup':extPopup=e.id||null;pinSig='';renderPins();break;
  case'imported':if($('#libm').classList.contains('open'))reqLib();break}}
-window.M5={inset,state,event,relayout,openSettings,lib:openLib,key:c=>{if(c==='escape'&&S&&S.fullscreen){act('fullscreen');return}runCombo(c)},palette:()=>palette(true)};
+window.M5={focusUrl,inset,state,event,relayout,openSettings,lib:openLib,key:c=>{if(c==='escape'&&S&&S.fullscreen){act('fullscreen');return}runCombo(c)},palette:()=>palette(true)};
 })();

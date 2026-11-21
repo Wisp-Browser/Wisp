@@ -6,6 +6,16 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Opening a new tab (Ctrl+T, the + button, or closing the last tab) selects the address bar, so you
+  can start typing right away, like Chrome. Pressing Enter there moves the keyboard to the page.
+
+### Fixed
+- Extension popups that don't set a width of their own (such as Bitwarden's) no longer open as a
+  thin strip. They open at a normal popup width, while popups with their own width keep it.
+- Switching straight from one extension's popup to another no longer opens the second at the first
+  one's size.
+
 ## [0.4.0] - 2026-11-21
 
 ### Added

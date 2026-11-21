@@ -254,7 +254,7 @@ enum Ev {
     /// An extension finished downloading (staged, waiting for the user to confirm).
     ExtFetched(String, Box<Result<(extensions::Ext, std::path::PathBuf), String>>),
     /// A message from an open extension popup.
-    PopupIpc(String),
+    PopupIpc(u64, String),
     /// An extension couldn't be loaded into the engine.
     ExtLoadErr(String),
     /// Chrome Web Store icons finished downloading.
@@ -961,15 +961,20 @@ struct Popup {
     n: u64,
     /// Last size applied (0 until the popup reports its content size).
     w: f64,
+    /// The page has shown a width of its own (a page exactly as wide as the popup looks fluid).
+    fixed: bool,
 }
 
 /// Runs in extension popups: reports the content size (they size to fit, as in Chrome) and turns
 /// `window.close()` and Esc into closing the popup.
 const POPUP_INIT: &str = r#"(function(){if(location.protocol!=='chrome-extension:'||window.top!==window)return;const p=o=>{try{window.ipc.postMessage(JSON.stringify(o))}catch(_){}};
 window.close=()=>p({t:'ext_popup_close'});
-let last='';const send=()=>{const b=document.body,d=document.documentElement;if(!b)return;const w=Math.ceil(Math.max(b.scrollWidth,d.scrollWidth,b.offsetWidth)),h=Math.ceil(Math.max(b.scrollHeight,d.scrollHeight,b.offsetHeight));const k=w+'x'+h;if(k!==last){last=k;p({t:'ext_popup_size',w,h})}};
+// A page without a set width just fills whatever it is given ("fluid"): report that, and Wisp
+// gives it a normal popup width instead of the narrowest one its content allows.
+let last='';const send=()=>{const b=document.body,d=document.documentElement;if(!b)return;const cs=getComputedStyle(b),bw=b.getBoundingClientRect().width+(parseFloat(cs.marginLeft)||0)+(parseFloat(cs.marginRight)||0),f=Math.abs(bw-d.clientWidth)<2&&Math.abs(d.getBoundingClientRect().width-d.clientWidth)<2;
+ const w=Math.ceil(Math.max(b.scrollWidth,bw,d.getBoundingClientRect().width)),h=Math.ceil(Math.max(b.scrollHeight,d.scrollHeight,b.offsetHeight));const k=w+'x'+h+f;if(k!==last){last=k;p({t:'ext_popup_size',w,h,f})}};
 const go=()=>{send();try{new ResizeObserver(send).observe(document.body)}catch(_){}try{new MutationObserver(send).observe(document.documentElement,{subtree:true,childList:true,attributes:true})}catch(_){}setTimeout(send,150);setTimeout(send,500)};
-if(document.readyState==='loading')addEventListener('DOMContentLoaded',go);else go();
+if(document.readyState==='loading')addEventListener('DOMContentLoaded',go);else go();addEventListener('resize',()=>{last='';send()});addEventListener('load',()=>{last='';send()});
 addEventListener('keydown',e=>{if(e.key==='Escape')p({t:'ext_popup_close'})},true);
 // Every WebView2 page is its own engine "window", so "the active tab in the current window" would be
 // the popup itself. Answer such queries with the Wisp tab the user is looking at, like Chrome does.
@@ -1224,6 +1229,8 @@ impl App {
             .with_download_completed_handler(move |url, path, ok| {
                 let _ = pd2.send_event(Ev::DlDone(url, path.map(|p| p.to_string_lossy().to_string()), ok));
             })
+            // A New Tab page leaves the keyboard in the address bar.
+            .with_focused(!url.starts_with(NEWTAB_ID))
             .with_url(real(url))
             .build();
         let _ = t5;
@@ -1859,6 +1866,11 @@ impl App {
             s.tabs.push(tab);
         }
         self.select(id);
+        // A New Tab starts with the address bar selected, ready to type in, like Chrome.
+        if url == NEWTAB_ID {
+            let _ = self.chrome.focus();
+            let _ = self.chrome.evaluate_script("window.M5&&window.M5.focusUrl()");
+        }
     }
 
     fn select(&mut self, id: usize) {
@@ -2477,6 +2489,19 @@ impl App {
             "go" => {
                 let target = from.unwrap_or(self.space().active);
                 self.navigate(target, &s("input"));
+                // From the address bar: the keyboard goes to the page, as in Chrome.
+                if from.is_none() {
+                    if let Some((si, ti)) = self.find_tab(target) {
+                        if let Some(v) = &self.spaces[si].tabs[ti].view {
+                            let _ = v.focus();
+                        }
+                    }
+                }
+            }
+            // The address bar is being focused: give Wisp's interface the keyboard (a shortcut
+            // pressed in a page leaves the keyboard with that page otherwise).
+            "chrome_focus" => {
+                let _ = self.chrome.focus();
             }
             // Ctrl+Shift+T: bring back the most recently closed tab (in its own space if it still exists).
             "reopen" => {
@@ -3031,7 +3056,7 @@ impl App {
             .with_focused(false)
             .with_initialization_script(&POPUP_INIT.replace("__AU__", &json!(active_url).to_string()))
             .with_ipc_handler(move |req| {
-                let _ = p1.send_event(Ev::PopupIpc(req.into_body()));
+                let _ = p1.send_event(Ev::PopupIpc(n, req.into_body()));
             })
             .with_new_window_req_handler(move |u| {
                 let _ = p2.send_event(Ev::NewWindow(u));
@@ -3049,6 +3074,7 @@ impl App {
                     y,
                     n,
                     w: 0.0,
+                    fixed: false,
                 });
                 self.later(800, Ev::PopupFallback(n));
                 self.chrome_emit(json!({"type":"ext_popup","id":id}));
@@ -3058,9 +3084,12 @@ impl App {
     }
 
     /// Size the popup to its content (Chrome's limits: 25×25 to 800×600) and keep it on screen.
-    fn ext_popup_size(&mut self, w: f64, h: f64) {
+    fn ext_popup_size(&mut self, w: f64, h: f64, fluid: bool) {
         let (ww, wh) = self.size();
         let Some(p) = self.ext_popup.as_mut() else { return };
+        // A fluid page (no width of its own) gets the width most extension popups are made for.
+        p.fixed |= !fluid;
+        let w = if fluid && !p.fixed { w.max(380.0) } else { w };
         let w = w.clamp(25.0, 800.0).min(ww - 16.0);
         let h = h.clamp(25.0, 600.0).min(wh - p.y - 8.0).max(25.0);
         let x = (p.x - w).clamp(8.0, (ww - w - 8.0).max(8.0));
@@ -3763,10 +3792,18 @@ impl App {
                 let n = self.exts.iter().find(|e| e.id == id).map(|e| e.name.clone()).unwrap_or(id);
                 self.toast(&format!("{n} couldn't be loaded by the engine"));
             }
-            Ev::PopupIpc(b) => {
+            Ev::PopupIpc(n, b) => {
+                // A popup that was just closed can still report for a moment; only the open one counts.
+                if self.ext_popup.as_ref().map(|p| p.n) != Some(n) {
+                    return;
+                }
                 let Ok(m) = serde_json::from_str::<Value>(&b) else { return };
                 match m["t"].as_str().unwrap_or("") {
-                    "ext_popup_size" => self.ext_popup_size(m["w"].as_f64().unwrap_or(0.0), m["h"].as_f64().unwrap_or(0.0)),
+                    "ext_popup_size" => self.ext_popup_size(
+                        m["w"].as_f64().unwrap_or(0.0),
+                        m["h"].as_f64().unwrap_or(0.0),
+                        m["f"].as_bool().unwrap_or(false),
+                    ),
                     "ext_popup_close" => self.ext_popup_close(),
                     _ => {}
                 }
@@ -3774,7 +3811,7 @@ impl App {
             Ev::PopupFallback(n) => {
                 // No usable size yet (fluid layout, or the page can't message Wisp): Chrome's default.
                 if self.ext_popup.as_ref().is_some_and(|p| p.n == n && p.w < 60.0) {
-                    self.ext_popup_size(380.0, 580.0);
+                    self.ext_popup_size(380.0, 580.0, false);
                 }
             }
             Ev::Show => self.show_window(),
