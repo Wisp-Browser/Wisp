@@ -26,9 +26,9 @@
 </div></nav>
 
 <header class="hero wrap">
-  <a class="pill glass rv" href="https://github.com/jakedev2/Wisp/releases/latest"><b>New</b> Version <span data-version>0.2.5</span><span class="wide">&nbsp;— bookmarks bar, Liquid Glass on iPhone</span></a>
+  <a class="pill glass rv" href="https://github.com/jakedev2/Wisp/releases/latest"><b>New</b> Version <span data-version>0.2.5</span><span class="wide">&nbsp;— Chrome extensions</span></a>
   <h1 class="rv d1"><span class="grad">The browser that<br>stays out of your way.</span></h1>
-  <p class="lead rv d2">Wisp is a fast, glassy, private browser built in Rust. A 2&nbsp;MB download, light on memory, with an ad blocker and a free AI assistant built in.</p>
+  <p class="lead rv d2">Wisp is a fast, glassy, private browser built in Rust. A 2&nbsp;MB download, light on memory, with an ad blocker and a free AI assistant built in, and it runs your Chrome extensions.</p>
   <div class="cta rv d3">
     <a class="btn go" href="https://github.com/jakedev2/Wisp/releases/latest" data-dl="setup" data-main>
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v7H3zm0 13l7.5 1v-7H3zm8.5 1.1L21 21v-8.5h-9.5zm0-15.2V11.5H21V3z"/></svg>
@@ -46,6 +46,7 @@
   <h2 class="rv d1">Everything you need. Nothing you don't.</h2>
   <p class="sub rv d2">Wisp runs on the web engine already in your system, so the app itself stays tiny and fast.</p>
   <div class="grid" style="text-align:left">
+    <div class="card glass rv wide-card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4.5a2 2 0 1 1 4 0V6h3.5a1.5 1.5 0 0 1 1.5 1.5V11h-1.5a2 2 0 1 0 0 4H19v3.5a1.5 1.5 0 0 1-1.5 1.5H14v-1.5a2 2 0 1 0-4 0V20H6.5A1.5 1.5 0 0 1 5 18.5V15h1.5a2 2 0 1 0 0-4H5V7.5A1.5 1.5 0 0 1 6.5 6H10z"/></svg></div><div><h3>Chrome extensions <span class="tag">New</span></h3><p>Add extensions straight from the Chrome Web Store. Password managers, ad blockers, dark mode and developer tools work just like they do in Chrome.</p></div></div>
     <div class="card glass rv"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></div><h3>Light and quick</h3><p>A 2&nbsp;MB installer. Memory saver unloads tabs you aren't using, so 15 open tabs use about 150–250&nbsp;MB in total.</p></div>
     <div class="card glass rv d1"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><h3>Private by default</h3><p>A built-in ad and tracker blocker, HTTPS-only mode, private windows, and no analytics or telemetry. Ever.</p></div>
     <div class="card glass rv d2"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5l1.9 5.1 5.1 1.9-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/><path d="M18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg></div><h3>Free AI, built in</h3><p>Summarize a page, ask about it, translate, or explain selected text. Works out of the box with no account, or bring your own model.</p></div>
@@ -81,6 +82,19 @@
       </ul>
     </div>
     <div class="shot rv d1"><img src="img/desktop-ai.jpg" width="1296" height="839" loading="lazy" alt="The Wisp AI panel open beside the New Tab page"></div>
+  </div>
+  <div class="split">
+    <div class="txt rv">
+      <div class="kicker">Extensions</div>
+      <h2>Your Chrome extensions, too.</h2>
+      <p class="sub">Wisp runs extensions from the Chrome Web Store on the same engine as Microsoft Edge.</p>
+      <ul>
+        <li><span><b>One click.</b> In the Chrome Web Store, the Add to Chrome button reads <b>Add to Wisp</b>.</span></li>
+        <li><span><b>See before you add.</b> Wisp shows what an extension can access before anything is installed.</span></li>
+        <li><span><b>Right where you expect.</b> Open extensions from the toolbar, pin your favourites, and manage them in Settings.</span></li>
+      </ul>
+    </div>
+    <div class="shot rv d1"><img src="img/desktop-extensions.jpg" width="1296" height="839" loading="lazy" alt="Wisp's Extensions page with Dark Reader and Bitwarden installed and popular extensions from the Chrome Web Store"></div>
   </div>
 </section>
 
@@ -127,6 +141,7 @@
   <div class="faq">
     <details class="glass rv"><summary>Is Wisp free?</summary><p>Yes. Wisp is free and open source under the MIT licence. There are no ads, accounts or paid tiers.</p></details>
     <details class="glass rv"><summary>What engine does it use?</summary><p>On Windows, Microsoft's WebView2, the same Chromium engine as Edge, so sites work like they do in Chrome. On iPhone, Apple's WebKit, which iOS requires of every browser. Using the system's engine is why Wisp is so small.</p></details>
+    <details class="glass rv"><summary>Can I use Chrome extensions?</summary><p>Yes, on Windows. Get them from the Chrome Web Store, where the button reads <b>Add to Wisp</b>, or from Wisp's Extensions page. They run on the same engine as Microsoft Edge, so most work exactly as in Chrome; a few Chrome-only features, such as the side panel, aren't available. Extensions are off in private windows.</p></details>
     <details class="glass rv"><summary>Windows says "Windows protected your PC". Is it safe?</summary><p>That warning appears for new apps that aren't code-signed yet. Click <b>More info → Run anyway</b>. Every release is built in public by GitHub Actions from the source code, with SHA-256 checksums published next to the downloads.</p></details>
     <details class="glass rv"><summary>Do I need anything else installed?</summary><p>Windows 11 already has everything. Windows 10 may need Microsoft's free <a href="https://developer.microsoft.com/microsoft-edge/webview2/">WebView2 Runtime</a>, which most PCs already have.</p></details>
     <details class="glass rv"><summary>Does Wisp collect my data?</summary><p>No. Your history, bookmarks and settings stay on your device. See the <a href="privacy.html">privacy policy</a> for exactly which services Wisp talks to, and when.</p></details>
