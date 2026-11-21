@@ -6,6 +6,15 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.10-beta.1] - 2026-11-20
+
+### Fixed
+- No more flicker when opening new tabs.
+  - A freshly built page renders off-screen while the current page stays up, then replaces it
+    in one step once it has painted (before, it was shown blank first).
+  - The next ready-made New Tab page is prepared sooner (about 0.6 s after opening a tab).
+  - Switching pages shows the new one before hiding the old one.
+
 ## [0.2.9] - 2026-11-20
 
 ### Fixed

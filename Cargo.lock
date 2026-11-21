@@ -3772,7 +3772,7 @@ dependencies = [
 
 [[package]]
 name = "wisp"
-version = "0.2.9"
+version = "0.2.10-beta.1"
 dependencies = [
  "dirs",
  "keyring",

@@ -1104,11 +1104,7 @@ impl App {
                 b.tid.store(tid, Ordering::Relaxed);
                 let _ = b.view.set_bounds(to_rect(rect));
                 let _ = b.view.evaluate_script("window.wispAwake&&window.wispAwake()");
-                let p = self.proxy.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(900));
-                    let _ = p.send_event(Ev::MakeSpare(sid));
-                });
+                self.later(600, Ev::MakeSpare(sid));
                 Some(b)
             }
             other => {
@@ -1206,17 +1202,36 @@ impl App {
                 .tabs
                 .iter()
                 .any(|t| ids.contains(&t.id) && t.view.is_some() && !t.ready);
-        for (si, sp) in self.spaces.iter_mut().enumerate() {
-            for t in sp.tabs.iter_mut() {
-                if let Some(v) = &t.view {
+        // Two passes: show the pages that should be on screen first, then hide the rest, so there
+        // is never a moment with no page showing (the window background would flash through).
+        for pass in [true, false] {
+            for (si, sp) in self.spaces.iter_mut().enumerate() {
+                for t in sp.tabs.iter_mut() {
+                    let Some(v) = &t.view else { continue };
                     let idx = if si == cur { ids.iter().position(|x| *x == t.id) } else { None };
+                    let on_screen = show && idx.is_some();
+                    if on_screen != pass {
+                        continue;
+                    }
                     match idx {
                         Some(i) if show => {
-                            if t.at != Some(rects[i]) {
-                                let _ = v.set_bounds(to_rect(rects[i]));
-                                t.at = Some(rects[i]);
+                            // A page that hasn't painted yet renders off-screen (the page before it
+                            // stays up meanwhile, see `hold`), then moves into place in one step:
+                            // no blank frame in between.
+                            let target = if t.ready {
+                                rects[i]
+                            } else {
+                                R {
+                                    x: -6000.0,
+                                    y: -6000.0,
+                                    ..rects[i]
+                                }
+                            };
+                            if t.at != Some(target) {
+                                let _ = v.set_bounds(to_rect(target));
+                                t.at = Some(target);
                             }
-                            if t.ready && t.vis != Some(true) {
+                            if t.vis != Some(true) {
                                 let _ = v.set_visible(true);
                                 t.vis = Some(true);
                             }
@@ -2995,8 +3010,8 @@ impl App {
             }
             // The spare New Tab page is made once the user has stopped opening/closing tabs.
             Ev::MakeSpare(sid) => {
-                if self.busy_with_tabs(Duration::from_millis(1200)) || self.build_due {
-                    self.later(800, Ev::MakeSpare(sid));
+                if self.busy_with_tabs(Duration::from_millis(500)) || self.build_due {
+                    self.later(400, Ev::MakeSpare(sid));
                 } else {
                     self.make_spare(sid);
                 }
@@ -3129,10 +3144,10 @@ impl App {
                 if let Some((si, ti)) = self.find_tab(id) {
                     let t = &mut self.spaces[si].tabs[ti];
                     t.loading = false;
-                    let newly_ready = !t.ready;
-                    t.ready = true;
-                    if newly_ready {
-                        self.sync_views();
+                    // Loaded isn't painted yet: give it a couple of frames (it renders off-screen)
+                    // before it replaces the page on screen.
+                    if !t.ready {
+                        self.later(60, Ev::Ready(id));
                     }
                     let t = &mut self.spaces[si].tabs[ti];
                     visit = Some((t.url.clone(), t.title.clone()));
