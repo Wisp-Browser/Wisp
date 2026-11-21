@@ -6,6 +6,8 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1-beta.1] - 2026-11-21
+
 ### Added
 - A Christmas theme (Customize → Appearance → Holiday): falling snow (with an amount slider), twinkling
   fairy lights across the top of the New Tab page, snow drifts, snow on the search bar and cards, and
