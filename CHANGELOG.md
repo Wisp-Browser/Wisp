@@ -6,6 +6,21 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-22
+
+### Changed
+- A new look for the installer and uninstaller, matching the app: the dark theme, Segoe UI, a dark
+  title bar, flat buttons, and on/off switches like the ones in Settings (click the switch or its
+  text). The progress bar is indigo, and setup goes straight on to a new "Wisp is ready" page with
+  an "Open Wisp now" switch and a single Finish button.
+- The uninstaller closes itself when it's done.
+- Wisp's home moved to github.com/Wisp-Browser/Wisp and its website to wisp-browser.github.io/Wisp.
+  Updates keep arriving as before.
+
+### Fixed
+- The installer's progress bar now fills all the way when installing is done. Steps that were
+  skipped (such as the optional Ollama download) used to leave it short of the end.
+
 ## [0.5.1] - 2026-11-21
 
 Everything from 0.5.1-beta.1 (the Christmas theme, bookmark folders, new sliders, narrower tabs and
