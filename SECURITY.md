@@ -7,7 +7,7 @@ Only the latest release receives security fixes. Wisp updates itself, so please 
 ## Reporting a vulnerability
 
 Please **do not** open a public issue. Use GitHub's private reporting instead:
-https://github.com/jakedev2/Wisp/security/advisories/new
+https://github.com/Wisp-Browser/Wisp/security/advisories/new
 
 Include what you found, how to reproduce it, and the Wisp version (Settings → About).
 You can expect a first reply within a few days.

@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="https://jakedev2.github.io/Wisp/"><b>Website</b></a> ·
-  <a href="https://github.com/jakedev2/Wisp/releases/latest"><b>Download</b></a> ·
+  <a href="https://wisp-browser.github.io/Wisp/"><b>Website</b></a> ·
+  <a href="https://github.com/Wisp-Browser/Wisp/releases/latest"><b>Download</b></a> ·
   <a href="https://discord.gg/4rn5e7JTTN">Discord</a> ·
-  <a href="https://jakedev2.github.io/Wisp/privacy.html">Privacy</a>
+  <a href="https://wisp-browser.github.io/Wisp/privacy.html">Privacy</a>
 </p>
 
 <p align="center">
@@ -48,7 +48,7 @@
 
 ## Install
 
-1. Download `Wisp-<version>-setup.exe` from the [latest release](https://github.com/jakedev2/Wisp/releases/latest).
+1. Download `Wisp-<version>-setup.exe` from the [latest release](https://github.com/Wisp-Browser/Wisp/releases/latest).
 2. Run it. It installs just for you (no administrator rights) into `%LOCALAPPDATA%\Programs\Wisp`, adds a Start Menu
    shortcut, and offers a Desktop shortcut, default-browser setup, and Ollama for local AI.
 3. Windows 10 may need the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). Windows 11 already has it.

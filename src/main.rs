@@ -38,7 +38,7 @@ use wry::{
     Rect, WebContext, WebView, WebViewBuilder,
 };
 
-pub const GITHUB_OWNER: &str = "jakedev2";
+pub const GITHUB_OWNER: &str = "Wisp-Browser";
 pub const GITHUB_REPO: &str = "Wisp";
 
 const CHROME: &str = include_str!("../ui/chrome.html");

@@ -71,7 +71,7 @@ The `.ipa` from GitHub isn't signed for your phone. A sideloading tool signs it 
 (free) Apple ID:
 
 1. **Get the .ipa:** download `Wisp-<version>-iOS.ipa` from the
-   [latest release](https://github.com/jakedev2/Wisp/releases/latest). Builds of unreleased
+   [latest release](https://github.com/Wisp-Browser/Wisp/releases/latest). Builds of unreleased
    changes are under **Actions → iOS** as the `Wisp-ios` artifact.
 2. **Install Apple's device drivers:** install **iTunes** (the version from apple.com, not the
    Microsoft Store one) or the **Apple Devices** app. Then plug in the iPhone and tap **Trust** on

@@ -1,6 +1,6 @@
 // Wisp website: direct download links from the latest release, scroll reveals, screenshot zoom.
 (() => {
-  const REPO = 'jakedev2/Wisp';
+  const REPO = 'Wisp-Browser/Wisp';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 

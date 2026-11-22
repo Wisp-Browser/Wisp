@@ -274,7 +274,7 @@ pub fn stream(req: &Req, stop: &AtomicBool, on: &mut dyn FnMut(&str)) -> Result<
                 (
                     "https://openrouter.ai/api/v1/chat/completions",
                     vec![
-                        ("HTTP-Referer", "https://github.com/jakedev2/Wisp".to_string()),
+                        ("HTTP-Referer", "https://github.com/Wisp-Browser/Wisp".to_string()),
                         ("X-Title", "Wisp".to_string()),
                     ],
                 )
