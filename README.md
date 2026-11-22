@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://jakedev2.github.io/Wisp/"><b>Website</b></a> ·
   <a href="https://github.com/jakedev2/Wisp/releases/latest"><b>Download</b></a> ·
+  <a href="https://discord.gg/4rn5e7JTTN">Discord</a> ·
   <a href="https://jakedev2.github.io/Wisp/privacy.html">Privacy</a>
 </p>
 
@@ -93,87 +94,31 @@ Wisp uses Chrome's shortcuts, and everything is rebindable in *Settings → Shor
 | `F9` | Reader mode |
 | `Alt+1…9` | Spaces |
 
-## Build from source
+## Built in Rust 🦀
 
-You need Windows, [Rust](https://rustup.rs) (MSVC toolchain) and the "Desktop development with C++" build tools.
+Wisp is written entirely in [Rust](https://www.rust-lang.org): about 9,000 lines for the Windows app, plus the iOS app in
+[`ios/`](ios/). Instead of shipping its own copy of Chromium, it drives the web engine the system already has. That keeps
+the download around 2 MB and memory use low.
 
-```
-git clone https://github.com/jakedev2/Wisp
-cd Wisp
-cargo run --release
-```
+| Piece | What it uses |
+|---|---|
+| Windows and events | [`tao`](https://crates.io/crates/tao) for native windows and the event loop |
+| Web views | [`wry`](https://crates.io/crates/wry) and [`webview2-com`](https://crates.io/crates/webview2-com) on Microsoft Edge WebView2 |
+| Windows integration | the official [`windows`](https://crates.io/crates/windows) crate: Mica backdrop, Windows Hello, DPAPI encryption, the registry |
+| iPhone and iPad | [`objc2`](https://crates.io/crates/objc2) bindings to UIKit and WebKit, with no Swift or Objective-C code |
+| Ad and tracker blocker | Wisp's own filter-list engine (Adblock Plus syntax, network and cosmetic rules) in `src/blocker.rs` |
+| Passwords | AES-256-GCM via [`aes-gcm`](https://crates.io/crates/aes-gcm), stored encrypted with Windows DPAPI |
+| History, bookmarks and imports | SQLite via [`rusqlite`](https://crates.io/crates/rusqlite) |
+| Chrome extensions | CRX3 parsing and unpacking with [`zip`](https://crates.io/crates/zip), loaded through WebView2's extension API |
+| Updates | [`ureq`](https://crates.io/crates/ureq) for HTTPS and [`sha2`](https://crates.io/crates/sha2) to verify each download |
+| AI keys | [`keyring`](https://crates.io/crates/keyring), which keeps them in Windows Credential Manager |
 
-Checks (the same ones CI runs):
-
-```
-cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-```
-
-Build the installer (needs [NSIS](https://nsis.sourceforge.io)):
-
-```
-cargo build --release
-mkdir dist
-makensis -DVERSION=0.1.0 -DEXE_PATH=%CD%\target\release\Wisp.exe -DOUT_FILE=%CD%\dist\Wisp-0.1.0-setup.exe installer\wisp.nsi
-```
-
-The version is defined once, in `Cargo.toml`. The repository owner and name used for updates are
-`GITHUB_OWNER` and `GITHUB_REPO` in `src/main.rs`.
-
-## Releasing
-
-Releases are built by `.github/workflows/release.yml` when you push a tag.
-
-### First release
-
-```
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/jakedev2/Wisp.git
-git push -u origin main
-
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Wait for the **Release** workflow to finish (Actions tab). The release will contain the installer
-(`Wisp-0.1.0-setup.exe`), the portable build (`Wisp-0.1.0-windows-x64.exe`), `SHA256SUMS.txt` and
-`latest.json` (the update feed). Install `0.1.0` from the release.
-
-### Check that updates work
-
-1. Bump `version` in `Cargo.toml` to `0.1.1` (and add a line to `CHANGELOG.md`). Commit and push.
-2. `git tag v0.1.1` then `git push origin v0.1.1`.
-3. Open the installed `0.1.0`. In *Settings → Updates* press **Check now** (it also checks by itself about a minute after
-   launch, then every 6 hours). It downloads in the background and shows **Update 0.1.1 ready → Restart**.
-4. Restart. Wisp swaps in the new version and relaunches. *Settings → Updates* now shows `0.1.1`. The old version is kept
-   as `Wisp.exe.prev` next to it.
-
-For a beta channel, tag `v0.2.0-beta.1`. Tags with a `-` are marked as pre-releases and only reach people who chose
-the **Beta** channel in *Settings → Updates*.
-
-### Code signing (optional)
-
-Unsigned builds work but Windows SmartScreen may warn. To sign the app and installer, add two repository secrets
-(*Settings → Secrets and variables → Actions*):
-
-| Secret | Value |
-| --- | --- |
-| `WINDOWS_CERT_BASE64` | your code-signing certificate (`.pfx`) encoded as base64 |
-| `WINDOWS_CERT_PASSWORD` | the password for that certificate |
-
-Create the base64 text in PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx")) | Set-Clipboard`
-
-When the secrets exist the release workflow signs `Wisp.exe` and the installer with SHA-256 and a timestamp.
-When they don't, those steps are skipped.
+The interface (tab strip, menus, settings, New Tab page) is plain HTML, CSS and JavaScript in [`ui/`](ui/), compiled into the
+executable. Rust handles everything underneath: tabs, profiles, storage, the blocker, downloads, updates and security.
 
 ## How updates stay safe
 
-- Updates come only from your repository's GitHub Releases, over HTTPS.
+- Updates come only from this repository's GitHub Releases, over HTTPS.
 - The downloaded file's SHA-256 must match the value in the release's `latest.json`, and is checked again right before it is applied.
 - Updates install on restart; nothing is ever swapped while you work.
 - A new version has to stay running for 20 seconds. If it fails to do that three launches in a row, the previous version is restored.
