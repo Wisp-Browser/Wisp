@@ -728,6 +728,30 @@ pub fn sync_profile(
 mod tests {
     use super::*;
     #[test]
+    fn unzip_keeps_files_inside() {
+        use std::io::Write;
+        let mut buf = Cursor::new(Vec::new());
+        {
+            let mut w = zip::ZipWriter::new(&mut buf);
+            let o = zip::write::SimpleFileOptions::default();
+            w.start_file("manifest.json", o).unwrap();
+            w.write_all(b"{}").unwrap();
+            w.start_file("js/app.js", o).unwrap();
+            w.write_all(b"1").unwrap();
+            w.start_file("../escape.txt", o).unwrap();
+            w.write_all(b"x").unwrap();
+            w.finish().unwrap();
+        }
+        let root = std::env::temp_dir().join(format!("wisp-unzip-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let dest = root.join("ext");
+        unzip(buf.get_ref(), &dest).unwrap();
+        assert_eq!(fs::read(dest.join("manifest.json")).unwrap(), b"{}");
+        assert_eq!(fs::read(dest.join("js/app.js")).unwrap(), b"1");
+        assert!(!root.join("escape.txt").exists());
+        fs::remove_dir_all(&root).unwrap();
+    }
+    #[test]
     fn ids() {
         assert!(valid_id("eimadpbcbfnmbkopoojfekhnkhdbieeh"));
         assert!(!valid_id("eimadpbcbfnmbkopoojfekhnkhdbiee"));

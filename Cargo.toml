@@ -23,9 +23,9 @@ url = "2"
 rfd = "0.15"
 ureq = "2"
 sha2 = "0.10"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 aes-gcm = "0.10"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 keyring = { version = "3", features = ["windows-native"] }
 
 [target.'cfg(windows)'.dependencies]
