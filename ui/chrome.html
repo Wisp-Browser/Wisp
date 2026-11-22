@@ -130,6 +130,9 @@ body.lay-vertical .tab.closing{animation-name:taboutv}
 /* Inactive tabs lend the close button's space to the title until they're hovered. */
 .cl{transition:opacity var(--dur) var(--ease),background-color var(--dur) var(--ease),width var(--dur) var(--ease),margin var(--dur) var(--ease)}
 body:not(.lay-vertical) .tab:not(.active):not(:hover):not(.pinned) .cl{width:0;margin-left:-8px}
+/* The × is pinned to the button's right edge (which stays put), so it fades out in place instead
+   of drifting sideways while the button narrows. Same spot as centred at full width. */
+.cl{position:relative}.cl .i{position:absolute;right:4.5px;top:50%;margin-top:-6.5px}
 /* Narrow tabs: the title is cut short ("Git…") and only goes once there's no room for it at all.
    (Sizes are the tab's content box: its width minus 14px of padding.) */
 @container (max-width:78px){.tab.active .tt{display:none}}
@@ -286,23 +289,30 @@ function syncTabs(){const sc=$('#tabs'),pins=S.tabs.filter(t=>t.pinned),rest=S.t
   else want.push(...pins.map(get),...rest.map(get));
   const sig=want.map(e=>e._t?e._t.id:e.className).join(',');
   if(sig!==tabSig){
-   // FLIP: remember where tabs were, change the DOM, then slide them from old to new spots (transform only).
-   // Opening/closing tabs in quick succession: skip the slide and fade animations (and clear any
-   // still running), so tabs never pile up on top of each other.
+   // FLIP: remember where tabs are on screen (mid-slide included), change the DOM, then slide them
+   // from there to their new spots (transform only). Because it starts from where each tab is
+   // drawn right now, a change that lands while the last one is still animating carries on smoothly
+   // instead of snapping tabs into place.
+   // Opening/closing tabs in quick succession: tabs still shrinking away are dropped at once (after
+   // measuring, so their neighbours slide over instead of jumping), so tabs never pile up.
    const now=performance.now(),rapid=now-lastTabChange<260;lastTabChange=now;
-   if(rapid){sc.querySelectorAll('.tab.closing').forEach(g=>g.remove());tabEls.forEach(el=>{el.style.transition='';el.style.transform='';el.classList.remove('new')})}
-   const anim=!firstRender&&!RM.matches&&tabSig!==''&&!rapid,before=new Map();
+   const anim=!firstRender&&!RM.matches&&tabSig!=='',before=new Map();
    if(anim)tabEls.forEach((el,id)=>{if(el.isConnected)before.set(id,el.getBoundingClientRect())});
+   if(rapid)sc.querySelectorAll('.tab.closing').forEach(g=>g.remove());
    const ids=new Set(S.tabs.map(t=>t.id));
-   // Closed tabs stay where they are while they shrink away (see .closing), then leave.
-   tabEls.forEach((el,id)=>{if(!ids.has(id)){if(anim&&el.isConnected){el.classList.remove('new');el.classList.add('closing');const gone=()=>el.remove();el.addEventListener('animationend',gone,{once:true});setTimeout(gone,450)}tabEls.delete(id)}});
+   // Closed tabs stay where they are while they shrink away (see .closing), then leave. In a quick
+   // burst they leave straight away (the slide above covers the gap).
+   tabEls.forEach((el,id)=>{if(!ids.has(id)){if(anim&&!rapid&&el.isConnected){el.classList.remove('new');el.classList.add('closing');const gone=()=>el.remove();el.addEventListener('animationend',gone,{once:true});setTimeout(gone,450)}else el.remove();tabEls.delete(id)}});
    const live=()=>[...sc.children].filter(c=>!c.classList.contains('closing'));
    want.forEach((el,i)=>{const k=live();if(k[i]!==el)sc.insertBefore(el,k[i]||null)});
    live().slice(want.length).forEach(c=>c.remove());
    const wasN=+sc.style.getPropertyValue('--n')||0,wasP=+sc.style.getPropertyValue('--np')||0;
    sc.classList.toggle('grow',rest.length>wasN||pins.length>wasP);
    sc.style.setProperty('--n',rest.length);sc.style.setProperty('--np',pins.length);
-   if(anim){const moved=[];before.forEach((r,id)=>{const el=tabEls.get(id);if(!el||!el.isConnected)return;const n=el.getBoundingClientRect(),dx=r.left-n.left,dy=r.top-n.top;
+   if(anim){const moved=[];
+    // Measure the new spots without any slide still in progress.
+    before.forEach((r,id)=>{const el=tabEls.get(id);if(el&&el.style.transform){el.style.transition='none';el.style.transform=''}});
+    before.forEach((r,id)=>{const el=tabEls.get(id);if(!el||!el.isConnected)return;const n=el.getBoundingClientRect(),dx=r.left-n.left,dy=r.top-n.top;
      if(Math.abs(dx)>.5||Math.abs(dy)>.5){el.style.transition='none';el.style.transform=`translate(${dx}px,${dy}px)`;moved.push(el)}});
     if(moved.length){sc.offsetWidth;moved.forEach(el=>{el.style.transition='transform var(--dur) var(--ease)';el.style.transform='';
      el.addEventListener('transitionend',function f(){el.style.transition='';el.removeEventListener('transitionend',f)})})}}

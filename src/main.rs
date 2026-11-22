@@ -651,22 +651,51 @@ fn base_builder(window: &Window) -> WebViewBuilder<'_> {
     b
 }
 
+/// The child window that hosts a webview.
+#[cfg(windows)]
+fn host_hwnd(v: &WebView) -> Option<windows::Win32::Foundation::HWND> {
+    use wry::WebViewExtWindows;
+    let mut hwnd = windows::Win32::Foundation::HWND::default();
+    // SAFETY: reads the host window handle of a controller we own.
+    unsafe { v.controller().ParentWindow(&mut hwnd).ok().map(|_| hwnd) }
+}
+
+/// Bring a webview's host window to the top of the window's children, unless it is already there.
+/// Re-stacking a window that is already on top still makes DWM recompose it, which could show the
+/// chrome blank for a frame while tabs were opened and closed.
+#[cfg(windows)]
+fn bring_to_top(v: &WebView) {
+    use windows::Win32::UI::WindowsAndMessaging::{GetWindow, SetWindowPos, GW_HWNDPREV, HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
+    let Some(hwnd) = host_hwnd(v) else { return };
+    // SAFETY: z-order query and change of our own child window.
+    unsafe {
+        if GetWindow(hwnd, GW_HWNDPREV).map_or(true, |p| p.is_invalid()) {
+            return;
+        }
+        let _ = SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+    }
+}
+
 /// New page views are created on top of the window's children; keep the chrome above them.
 #[cfg(windows)]
 fn raise_chrome(chrome: &WebView) {
-    use windows::Win32::{
-        Foundation::HWND,
-        UI::WindowsAndMessaging::{SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE},
+    bring_to_top(chrome);
+}
+
+/// Put a page directly under the chrome (above every other page), without moving the chrome.
+#[cfg(windows)]
+fn stack_under_chrome(v: &WebView, chrome: &WebView) {
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
+    let (Some(page), Some(ch)) = (host_hwnd(v), host_hwnd(chrome)) else {
+        return;
     };
-    use wry::WebViewExtWindows;
-    // SAFETY: z-order change of the chrome's own host window.
+    // SAFETY: z-order change of our own child window (inserted right after the chrome's).
     unsafe {
-        let mut hwnd = HWND::default();
-        if chrome.controller().ParentWindow(&mut hwnd).is_ok() {
-            let _ = SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
-        }
+        let _ = SetWindowPos(page, ch, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
     }
 }
+#[cfg(not(windows))]
+fn stack_under_chrome(_v: &WebView, _chrome: &WebView) {}
 
 /// Non-Windows builds exist only so CI can compile and test the shared logic.
 #[cfg(not(windows))]
@@ -1474,7 +1503,7 @@ impl App {
                                 t.at = Some(target);
                             }
                             if t.ready && !t.top {
-                                stack_view(v, true);
+                                stack_under_chrome(v, &self.chrome);
                                 t.top = true;
                             } else if !t.ready && t.vis != Some(true) {
                                 stack_view(v, false);
@@ -3510,6 +3539,9 @@ impl App {
     /// Keep the popup above the chrome, which is raised whenever pages are restacked.
     fn raise_popup(&self) {
         if let Some(p) = &self.ext_popup {
+            #[cfg(windows)]
+            bring_to_top(&p.view);
+            #[cfg(not(windows))]
             stack_view(&p.view, true);
         }
     }

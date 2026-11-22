@@ -6,6 +6,23 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-21
+
+Everything from 0.5.1-beta.1 (the Christmas theme, bookmark folders, new sliders, narrower tabs and
+the beta-channel fix), plus:
+
+### Fixed
+- Opening or closing tabs in quick succession no longer makes the tab strip stutter. Tabs that were
+  still sliding or fading in used to snap into place when the next one opened; now each change
+  carries on smoothly from wherever the tabs are on screen.
+- The close button of a tab that stops being the active one now fades out where it is, instead of
+  drifting sideways.
+- The toolbar could go blank for a frame when a tab was closed. Pages are now placed underneath the
+  toolbar without moving it.
+
+### Security
+- Updated the zip and SQLite libraries to versions without known vulnerabilities.
+
 ## [0.5.1-beta.1] - 2026-11-21
 
 ### Added
