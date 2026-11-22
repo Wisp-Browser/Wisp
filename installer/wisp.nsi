@@ -7,6 +7,8 @@
 ; Silent uninstall:      Uninstall.exe /S [/DELETEDATA]
 
 Unicode true
+ManifestDPIAware true
+SetFont "Segoe UI" 9
 !include "MUI2.nsh"
 !include "nsDialogs.nsh"
 !include "LogicLib.nsh"
@@ -34,9 +36,11 @@ RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\Wisp"
 InstallDirRegKey HKCU "${UNINST_KEY}" "InstallLocation"
 SetCompressor /SOLID lzma
-BrandingText "Wisp ${VERSION}"
-ShowInstDetails show
-ShowUninstDetails show
+BrandingText " "
+; go straight on to the finish page when the files are in
+AutoCloseWindow true
+ShowInstDetails hide
+ShowUninstDetails hide
 CRCCheck on
 
 ;; The Windows file version must be numeric (X.X.X.X): drop any pre-release suffix such as "-beta.1".
@@ -47,37 +51,175 @@ VIAddVersionKey "FileDescription" "Wisp installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "MIT License"
 
+; ---------------------------------------------------------------- look
+; The installer wears the app's dark theme (ui/theme.css): flat #18181E background, #F2F2F7 text,
+; the indigo accent, Segoe UI, and on/off switches drawn like the ones in Settings. The artwork
+; (header, logo, switches) is drawn at 2x so it stays sharp on high-DPI screens.
+!define C_BG "18181E"
+!define C_FG "F2F2F7"
+!define C_SUB "A6A6B0"
+!define C_LINE "2A2A34"
+
 !define MUI_ICON "..\assets\icon.ico"
 !define MUI_UNICON "..\assets\icon.ico"
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_BITMAP "header.bmp"
+!define MUI_HEADERIMAGE_UNBITMAP "header.bmp"
 !define MUI_HEADERIMAGE_RIGHT
-!define MUI_WELCOMEFINISHPAGE_BITMAP "sidebar.bmp"
-!define MUI_UNWELCOMEFINISHPAGE_BITMAP "sidebar.bmp"
+!define MUI_BGCOLOR "${C_BG}"
+!define MUI_TEXTCOLOR "${C_FG}"
+!define MUI_INSTFILESPAGE_COLORS "C8C8D0 ${C_BG}"
+!define MUI_INSTFILESPAGE_PROGRESSBAR "smooth"
 !define MUI_ABORTWARNING
+!define MUI_CUSTOMFUNCTION_GUIINIT ThemeWindow
+!define MUI_CUSTOMFUNCTION_UNGUIINIT un.ThemeWindow
 
 Var Dlg
-Var CbDesktop
-Var CbDefault
-Var CbOllama
 Var DesktopShortcut
 Var SetDefault
 Var InstallOllama
+Var LaunchNow
+Var OptionsShown
+Var FontTitle
+Var FontBig
+; each switch row: the switch, its two labels, and the switch's current image
+Var SwDesk
+Var LbDesk1
+Var LbDesk2
+Var ImDesk
+Var SwDef
+Var LbDef1
+Var LbDef2
+Var ImDef
+Var SwOll
+Var LbOll1
+Var LbOll2
+Var ImOll
+Var SwRun
+Var LbRun1
+Var ImRun
+Var ImHero
 
 ; One options page, then the install runs: close to "one click".
 Page custom OptionsPage OptionsLeave
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW InstFilesShow
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_TITLE "Wisp is ready"
-!define MUI_FINISHPAGE_RUN "$INSTDIR\Wisp.exe"
-!define MUI_FINISHPAGE_RUN_TEXT "Launch Wisp"
-!insertmacro MUI_PAGE_FINISH
+Page custom FinishPage FinishLeave
 
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW un.ConfirmShow
 !insertmacro MUI_UNPAGE_CONFIRM
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW un.InstFilesShow
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
+; ---------------------------------------------------------------- theme helpers
+!macro HIDE_ITEM ID
+  GetDlgItem $0 $HWNDPARENT ${ID}
+  ShowWindow $0 ${SW_HIDE}
+!macroend
+; Windows' own dark style for buttons, scroll bars and list views.
+!macro DARK_ITEM PARENT ID
+  GetDlgItem $0 ${PARENT} ${ID}
+  System::Call 'uxtheme::SetWindowTheme(p r0, w "DarkMode_Explorer", p 0)'
+!macroend
+; Dark title bar, dark buttons, and the window's own background and labels in the app colours.
+!macro THEME_WINDOW
+  SetCtlColors $HWNDPARENT ${C_FG} ${C_BG}
+  System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 20, *i 1, i 4)'
+  ; branding text and the etched separator lines don't belong in a flat dark window
+  !insertmacro HIDE_ITEM 1028
+  !insertmacro HIDE_ITEM 1256
+  !insertmacro HIDE_ITEM 1035
+  !insertmacro HIDE_ITEM 1036
+  !insertmacro HIDE_ITEM 1045
+  !insertmacro DARK_ITEM $HWNDPARENT 1
+  !insertmacro DARK_ITEM $HWNDPARENT 2
+  !insertmacro DARK_ITEM $HWNDPARENT 3
+  CreateFont $FontTitle "Segoe UI Semibold" 10 600
+  CreateFont $FontBig "Segoe UI Semibold" 15 600
+!macroend
+; The progress page: dark page, indigo progress bar on a dark track.
+!macro THEME_INSTFILES
+  FindWindow $1 "#32770" "" $HWNDPARENT
+  SetCtlColors $1 ${C_FG} ${C_BG}
+  GetDlgItem $0 $1 1006
+  SetCtlColors $0 ${C_FG} ${C_BG}
+  GetDlgItem $0 $1 1004
+  System::Call 'uxtheme::SetWindowTheme(p r0, w " ", w " ")'
+  SendMessage $0 0x0409 0 0x00E65C5E ; PBM_SETBARCOLOR #5E5CE6
+  SendMessage $0 0x2001 0 0x00342A2A ; PBM_SETBKCOLOR #2A2A34
+  !insertmacro DARK_ITEM $1 1016
+  !insertmacro DARK_ITEM $1 1027
+!macroend
+; A label in the page colours (COLOR is the text colour, FONT 0 keeps the default).
+!macro PAGE_LABEL VAR X Y W H TEXT COLOR FONT
+  ${NSD_CreateLabel} ${X} ${Y} ${W} ${H} "${TEXT}"
+  Pop ${VAR}
+  SetCtlColors ${VAR} ${COLOR} ${C_BG}
+  StrCmp ${FONT} 0 +2
+    SendMessage ${VAR} ${WM_SETFONT} ${FONT} 1
+!macroend
+!macro SHOW_SWITCH SW IM STATE
+  ${NSD_FreeImage} ${IM}
+  ${If} ${STATE} == 1
+    ${NSD_SetStretchedImage} ${SW} "$PLUGINSDIR\sw-on.bmp" ${IM}
+  ${Else}
+    ${NSD_SetStretchedImage} ${SW} "$PLUGINSDIR\sw-off.bmp" ${IM}
+  ${EndIf}
+!macroend
+; One settings row: a title, a description, and a switch on the right. Clicking the row's text or
+; the switch flips it.
+!macro SWITCH_ROW Y DY TITLE DESC SW LB1 LB2 IM STATE
+  !insertmacro PAGE_LABEL ${LB1} 0 ${Y} 252u 11u "${TITLE}" ${C_FG} $FontTitle
+  ${NSD_AddStyle} ${LB1} ${SS_NOTIFY}
+  ${NSD_OnClick} ${LB1} OnSwitch
+  !insertmacro PAGE_LABEL ${LB2} 0 ${DY} 252u 20u "${DESC}" ${C_SUB} 0
+  ${NSD_AddStyle} ${LB2} ${SS_NOTIFY}
+  ${NSD_OnClick} ${LB2} OnSwitch
+  ${NSD_CreateBitmap} 274u ${Y} 22u 12u ""
+  Pop ${SW}
+  ${NSD_AddStyle} ${SW} ${SS_NOTIFY}
+  ${NSD_OnClick} ${SW} OnSwitch
+  !insertmacro SHOW_SWITCH ${SW} ${IM} ${STATE}
+!macroend
+!macro DIVIDER Y
+  ${NSD_CreateLabel} 0 ${Y} 100% 1 ""
+  Pop $0
+  SetCtlColors $0 "" ${C_LINE}
+!macroend
+
+Function ThemeWindow
+  !insertmacro THEME_WINDOW
+FunctionEnd
+Function un.ThemeWindow
+  !insertmacro THEME_WINDOW
+FunctionEnd
+Function InstFilesShow
+  !insertmacro MUI_HEADER_TEXT "Installing Wisp" "This only takes a few seconds."
+  !insertmacro THEME_INSTFILES
+FunctionEnd
+Function un.InstFilesShow
+  !insertmacro THEME_INSTFILES
+FunctionEnd
+Function un.ConfirmShow
+  FindWindow $1 "#32770" "" $HWNDPARENT
+  SetCtlColors $1 ${C_FG} ${C_BG}
+  GetDlgItem $0 $1 1006
+  SetCtlColors $0 ${C_FG} ${C_BG}
+  GetDlgItem $0 $1 1029
+  SetCtlColors $0 ${C_SUB} ${C_BG}
+  GetDlgItem $0 $1 1000
+  SetCtlColors $0 ${C_FG} 202028
+FunctionEnd
+
 ; ---------------------------------------------------------------- options page
 Function .onInit
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\sw-on.bmp" "sw-on.bmp"
+  File "/oname=$PLUGINSDIR\sw-off.bmp" "sw-off.bmp"
+  File "/oname=$PLUGINSDIR\hero.bmp" "hero.bmp"
+  StrCpy $LaunchNow 1
+  StrCpy $OptionsShown 0
   ; defaults (also used for silent installs)
   StrCpy $DesktopShortcut 1
   StrCpy $SetDefault 0
@@ -101,46 +243,129 @@ Function .onInit
 FunctionEnd
 
 Function OptionsPage
-  !insertmacro MUI_HEADER_TEXT "Install Wisp ${VERSION}" "Choose what to set up. You can change all of this later."
+  !insertmacro MUI_HEADER_TEXT "Install Wisp ${VERSION}" "Fast, private and free. Installs just for you, no admin rights needed."
+  ; Interactive installs start with everything on (silent ones use the /flags instead).
+  ${If} $OptionsShown == 0
+    StrCpy $OptionsShown 1
+    StrCpy $DesktopShortcut 1
+    StrCpy $SetDefault 1
+    StrCpy $InstallOllama 1
+  ${EndIf}
   nsDialogs::Create 1018
   Pop $Dlg
   ${If} $Dlg == error
     Abort
   ${EndIf}
+  SetCtlColors $Dlg ${C_FG} ${C_BG}
 
-  ${NSD_CreateLabel} 0 0 100% 20u "Wisp installs just for your account, so no administrator rights are needed."
-  Pop $0
-
-  ${NSD_CreateCheckbox} 0 28u 100% 12u "Create a Desktop shortcut"
-  Pop $CbDesktop
-  ${NSD_Check} $CbDesktop
-
-  ${NSD_CreateCheckbox} 0 46u 100% 12u "Make Wisp my default browser"
-  Pop $CbDefault
-  ${NSD_Check} $CbDefault
-  ${NSD_CreateLabel} 12u 59u 94% 20u "Windows asks you to confirm this yourself, so Default apps opens when setup finishes."
-  Pop $0
-
-  ${NSD_CreateCheckbox} 0 84u 100% 12u "Install Ollama for private AI that runs on this PC (about 1 GB download)"
-  Pop $CbOllama
-  ${NSD_Check} $CbOllama
-  ${NSD_CreateLabel} 12u 97u 94% 30u "Ollama is a separate free program. It lets the AI sidebar run models locally with no account or key. It is skipped if you already have it."
-  Pop $0
+  !insertmacro SWITCH_ROW 4u 17u "Desktop shortcut" "Put Wisp on your desktop as well as in the Start menu." $SwDesk $LbDesk1 $LbDesk2 $ImDesk $DesktopShortcut
+  !insertmacro DIVIDER 42u
+  !insertmacro SWITCH_ROW 50u 63u "Make Wisp my default browser" "Windows asks you to confirm this yourself, so Default apps opens when setup finishes." $SwDef $LbDef1 $LbDef2 $ImDef $SetDefault
+  !insertmacro DIVIDER 88u
+  !insertmacro SWITCH_ROW 96u 109u "Private AI on this PC (Ollama)" "A free extra (about 1 GB) that runs Wisp AI locally, with no account or key. Skipped if you already have it." $SwOll $LbOll1 $LbOll2 $ImOll $InstallOllama
 
   ; the Next button becomes Install
   GetDlgItem $0 $HWNDPARENT 1
   SendMessage $0 ${WM_SETTEXT} 0 "STR:Install"
   nsDialogs::Show
+  ${NSD_FreeImage} $ImDesk
+  ${NSD_FreeImage} $ImDef
+  ${NSD_FreeImage} $ImOll
+FunctionEnd
+
+Function OnSwitch
+  Pop $9
+  ${If} $9 == $SwDesk
+  ${OrIf} $9 == $LbDesk1
+  ${OrIf} $9 == $LbDesk2
+    IntOp $DesktopShortcut $DesktopShortcut ^ 1
+    !insertmacro SHOW_SWITCH $SwDesk $ImDesk $DesktopShortcut
+  ${ElseIf} $9 == $SwDef
+  ${OrIf} $9 == $LbDef1
+  ${OrIf} $9 == $LbDef2
+    IntOp $SetDefault $SetDefault ^ 1
+    !insertmacro SHOW_SWITCH $SwDef $ImDef $SetDefault
+  ${ElseIf} $9 == $SwOll
+  ${OrIf} $9 == $LbOll1
+  ${OrIf} $9 == $LbOll2
+    IntOp $InstallOllama $InstallOllama ^ 1
+    !insertmacro SHOW_SWITCH $SwOll $ImOll $InstallOllama
+  ${ElseIf} $9 == $SwRun
+  ${OrIf} $9 == $LbRun1
+    IntOp $LaunchNow $LaunchNow ^ 1
+    !insertmacro SHOW_SWITCH $SwRun $ImRun $LaunchNow
+  ${EndIf}
 FunctionEnd
 
 Function OptionsLeave
-  ${NSD_GetState} $CbDesktop $DesktopShortcut
-  ${NSD_GetState} $CbDefault $SetDefault
-  ${NSD_GetState} $CbOllama $InstallOllama
+FunctionEnd
+
+; ---------------------------------------------------------------- finish page
+Function FinishPage
+  !insertmacro MUI_HEADER_TEXT "All done" "Wisp is installed and ready to go."
+  nsDialogs::Create 1018
+  Pop $Dlg
+  ${If} $Dlg == error
+    Abort
+  ${EndIf}
+  SetCtlColors $Dlg ${C_FG} ${C_BG}
+
+  ${NSD_CreateBitmap} 0 2u 40u 40u ""
+  Pop $0
+  ${NSD_SetStretchedImage} $0 "$PLUGINSDIR\hero.bmp" $ImHero
+  !insertmacro PAGE_LABEL $1 50u 7u 240u 16u "Wisp is ready" ${C_FG} $FontBig
+  !insertmacro PAGE_LABEL $1 50u 26u 240u 20u "Find it in the Start menu. It keeps itself up to date." ${C_SUB} 0
+  !insertmacro DIVIDER 54u
+  !insertmacro PAGE_LABEL $LbRun1 0 64u 252u 11u "Open Wisp now" ${C_FG} $FontTitle
+  ${NSD_AddStyle} $LbRun1 ${SS_NOTIFY}
+  ${NSD_OnClick} $LbRun1 OnSwitch
+  ${NSD_CreateBitmap} 274u 64u 22u 12u ""
+  Pop $SwRun
+  ${NSD_AddStyle} $SwRun ${SS_NOTIFY}
+  ${NSD_OnClick} $SwRun OnSwitch
+  !insertmacro SHOW_SWITCH $SwRun $ImRun $LaunchNow
+
+  ; just "Finish": no going back, nothing left to cancel
+  GetDlgItem $0 $HWNDPARENT 1
+  SendMessage $0 ${WM_SETTEXT} 0 "STR:Finish"
+  GetDlgItem $0 $HWNDPARENT 3
+  ShowWindow $0 ${SW_HIDE}
+  ; Finish takes Cancel's place in the corner
+  GetDlgItem $1 $HWNDPARENT 2
+  System::Call '*(i,i,i,i)p.r2'
+  System::Call 'user32::GetWindowRect(p r1, p r2)'
+  System::Call 'user32::MapWindowPoints(p 0, p $HWNDPARENT, p r2, i 2)'
+  System::Call '*$2(i.r3,i.r4,i,i)'
+  System::Free $2
+  ShowWindow $1 ${SW_HIDE}
+  GetDlgItem $0 $HWNDPARENT 1
+  System::Call 'user32::SetWindowPos(p r0, p 0, i r3, i r4, i 0, i 0, i 0x15)'
+  nsDialogs::Show
+  ${NSD_FreeImage} $ImHero
+  ${NSD_FreeImage} $ImRun
+FunctionEnd
+
+Function FinishLeave
+!ifndef PREVIEW
+  ${If} $LaunchNow == 1
+    Exec '"$INSTDIR\Wisp.exe"'
+  ${EndIf}
+!endif
 FunctionEnd
 
 ; ---------------------------------------------------------------- install
 Section "Install"
+!ifdef PREVIEW
+  ; Screenshot build: walks through the progress page without installing anything.
+  DetailPrint "Preview build: nothing is installed."
+  WriteUninstaller "$TEMP\wisp-preview-uninstall.exe"
+  StrCpy $0 0
+  preview_loop:
+    Sleep 150
+    IntOp $0 $0 + 1
+    IntCmp $0 20 0 preview_loop 0
+  Return
+!endif
   SetShellVarContext current
   SetOutPath "$INSTDIR"
 
@@ -244,6 +469,11 @@ Function un.onInit
 FunctionEnd
 
 Section "Uninstall"
+!ifdef PREVIEW
+  DetailPrint "Preview build: nothing is removed."
+  Sleep 1500
+  Return
+!endif
   SetShellVarContext current
 
   ; Ask about user data unless this is a silent uninstall. Keeping it is the default.
