@@ -39,8 +39,8 @@ SetCompressor /SOLID lzma
 BrandingText " "
 ; go straight on to the finish page when the files are in
 AutoCloseWindow true
-ShowInstDetails hide
-ShowUninstDetails hide
+ShowInstDetails nevershow
+ShowUninstDetails nevershow
 CRCCheck on
 
 ;; The Windows file version must be numeric (X.X.X.X): drop any pre-release suffix such as "-beta.1".
@@ -103,6 +103,7 @@ Var ImHero
 ; One options page, then the install runs: close to "one click".
 Page custom OptionsPage OptionsLeave
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstFilesShow
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE InstFilesLeave
 !insertmacro MUI_PAGE_INSTFILES
 Page custom FinishPage FinishLeave
 
@@ -117,7 +118,34 @@ Page custom FinishPage FinishLeave
   GetDlgItem $0 $HWNDPARENT ${ID}
   ShowWindow $0 ${SW_HIDE}
 !macroend
-; Windows' own dark style for buttons, scroll bars and list views.
+; Swap a push button for a flat one in the app colours: a centred, clickable label with
+; the same control ID, so setup treats it exactly like the button it replaces (text, enabling,
+; clicks, Enter and Esc). Windows' own dark buttons have a bright outline.
+!macro FLAT_BUTTON ID BG
+  GetDlgItem $0 $HWNDPARENT ${ID}
+  System::Call '*(i,i,i,i)p.r2'
+  System::Call 'user32::GetWindowRect(p r0, p r2)'
+  System::Call 'user32::MapWindowPoints(p 0, p $HWNDPARENT, p r2, i 2)'
+  System::Call '*$2(i.r3,i.r4,i.r5,i.r6)'
+  System::Free $2
+  IntOp $5 $5 - $3
+  IntOp $6 $6 - $4
+  System::Call 'user32::GetWindowTextW(p r0, w .r7, i 256)'
+  SendMessage $0 ${WM_GETFONT} 0 0 $8
+  ; the button's own WS_VISIBLE style (the window itself isn't shown yet)
+  System::Call 'user32::GetWindowLongW(p r0, i -16) i.r9'
+  IntOp $9 $9 & 0x10000000
+  System::Call 'user32::DestroyWindow(p r0)'
+  ; WS_CHILD|WS_VISIBLE|SS_CENTERIMAGE|SS_NOTIFY|SS_CENTER
+  System::Call 'user32::CreateWindowExW(i 0, w "STATIC", w r7, i 0x50000301, i r3, i r4, i r5, i r6, p $HWNDPARENT, p ${ID}, p 0, p 0) p.r0'
+  ${If} $9 == 0
+  ${OrIf} ${ID} == 3
+    ShowWindow $0 ${SW_HIDE}
+  ${EndIf}
+  SendMessage $0 ${WM_SETFONT} $8 1
+  SetCtlColors $0 FFFFFF ${BG}
+!macroend
+; Windows' own dark style for scroll bars and list views.
 !macro DARK_ITEM PARENT ID
   GetDlgItem $0 ${PARENT} ${ID}
   System::Call 'uxtheme::SetWindowTheme(p r0, w "DarkMode_Explorer", p 0)'
@@ -132,14 +160,20 @@ Page custom FinishPage FinishLeave
   !insertmacro HIDE_ITEM 1035
   !insertmacro HIDE_ITEM 1036
   !insertmacro HIDE_ITEM 1045
-  !insertmacro DARK_ITEM $HWNDPARENT 1
-  !insertmacro DARK_ITEM $HWNDPARENT 2
-  !insertmacro DARK_ITEM $HWNDPARENT 3
+  !insertmacro FLAT_BUTTON 1 5E5CE6
+  !insertmacro FLAT_BUTTON 2 2A2A34
+  !insertmacro FLAT_BUTTON 3 2A2A34
   CreateFont $FontTitle "Segoe UI Semibold" 10 600
   CreateFont $FontBig "Segoe UI Semibold" 15 600
 !macroend
 ; The progress page: dark page, indigo progress bar on a dark track.
 !macro THEME_INSTFILES
+  GetDlgItem $0 $HWNDPARENT 1
+  ShowWindow $0 ${SW_HIDE}
+  GetDlgItem $0 $HWNDPARENT 2
+  ShowWindow $0 ${SW_HIDE}
+  GetDlgItem $0 $HWNDPARENT 3
+  ShowWindow $0 ${SW_HIDE}
   FindWindow $1 "#32770" "" $HWNDPARENT
   SetCtlColors $1 ${C_FG} ${C_BG}
   GetDlgItem $0 $1 1006
@@ -150,6 +184,14 @@ Page custom FinishPage FinishLeave
   SendMessage $0 0x2001 0 0x00342A2A ; PBM_SETBKCOLOR #2A2A34
   !insertmacro DARK_ITEM $1 1016
   !insertmacro DARK_ITEM $1 1027
+!macroend
+; Fill the progress bar (setup's range is 0-30000) and hold it there for a moment, so the page
+; visibly finishes before it moves on.
+!macro FILL_PROGRESS
+  FindWindow $1 "#32770" "" $HWNDPARENT
+  GetDlgItem $0 $1 1004
+  SendMessage $0 0x0402 30000 0 ; PBM_SETPOS
+  System::Call 'user32::UpdateWindow(p r0)'
 !macroend
 ; A label in the page colours (COLOR is the text colour, FONT 0 keeps the default).
 !macro PAGE_LABEL VAR X Y W H TEXT COLOR FONT
@@ -201,6 +243,16 @@ FunctionEnd
 Function un.InstFilesShow
   !insertmacro THEME_INSTFILES
 FunctionEnd
+; The bar follows setup's steps, so steps that are skipped (Ollama, say) leave it short of the end.
+; Fill it once everything is done and let it show for a moment before the finish page.
+Function InstFilesLeave
+  !insertmacro FILL_PROGRESS
+  Sleep 500
+FunctionEnd
+Function un.onUninstSuccess
+  !insertmacro FILL_PROGRESS
+  Sleep 500
+FunctionEnd
 Function un.ConfirmShow
   FindWindow $1 "#32770" "" $HWNDPARENT
   SetCtlColors $1 ${C_FG} ${C_BG}
@@ -210,6 +262,8 @@ Function un.ConfirmShow
   SetCtlColors $0 ${C_SUB} ${C_BG}
   GetDlgItem $0 $1 1000
   SetCtlColors $0 ${C_FG} 202028
+  System::Call 'uxtheme::SetWindowTheme(p r0, w "DarkMode_CFD", p 0)'
+  SendMessage $0 0x00B1 0 0 ; EM_SETSEL: no highlighted text
 FunctionEnd
 
 ; ---------------------------------------------------------------- options page
@@ -339,7 +393,8 @@ Function FinishPage
   System::Free $2
   ShowWindow $1 ${SW_HIDE}
   GetDlgItem $0 $HWNDPARENT 1
-  System::Call 'user32::SetWindowPos(p r0, p 0, i r3, i r4, i 0, i 0, i 0x15)'
+  System::Call 'user32::SetWindowPos(p r0, p 0, i r3, i r4, i 0, i 0, i 0x55)'
+  System::Call 'user32::InvalidateRect(p $HWNDPARENT, p 0, i 1)'
   nsDialogs::Show
   ${NSD_FreeImage} $ImHero
   ${NSD_FreeImage} $ImRun
@@ -359,11 +414,11 @@ Section "Install"
   ; Screenshot build: walks through the progress page without installing anything.
   DetailPrint "Preview build: nothing is installed."
   WriteUninstaller "$TEMP\wisp-preview-uninstall.exe"
-  StrCpy $0 0
+  StrCpy $2 0
   preview_loop:
-    Sleep 150
-    IntOp $0 $0 + 1
-    IntCmp $0 20 0 preview_loop 0
+    Sleep 100
+    IntOp $2 $2 + 1
+    IntCmp $2 20 0 preview_loop 0
   Return
 !endif
   SetShellVarContext current
@@ -459,6 +514,7 @@ FunctionEnd
 Var DeleteData
 
 Function un.onInit
+  SetAutoClose true
   StrCpy $DeleteData 0
   ${GetParameters} $R0
   ${GetOptions} $R0 "/DELETEDATA" $R1
@@ -471,7 +527,7 @@ FunctionEnd
 Section "Uninstall"
 !ifdef PREVIEW
   DetailPrint "Preview build: nothing is removed."
-  Sleep 1500
+  Sleep 800
   Return
 !endif
   SetShellVarContext current
