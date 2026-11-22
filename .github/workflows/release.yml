@@ -122,3 +122,30 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ios/target/ipa/*.ipa
+
+  discord:
+    name: Announce in Discord #releases
+    needs: windows
+    runs-on: ubuntu-latest
+    env:
+      WEBHOOK: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
+      # Release Pings for stable releases, Beta Pings for pre-releases (tags with "-")
+      ROLE: ${{ contains(github.ref_name, '-') && '1573871748892467362' || '1573871643132956702' }}
+      KIND: ${{ contains(github.ref_name, '-') && 'beta' || 'release' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Post the release
+        if: env.WEBHOOK != ''
+        run: |
+          rel=$(gh api "repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}")
+          url=$(jq -r .html_url <<<"$rel")
+          notes=$(jq -r '.body // ""' <<<"$rel" | head -c 3500)
+          if [ "$KIND" = beta ]; then title="🧪 Wisp ${{ github.ref_name }} (beta) is out"; color=1752220; else title="🚀 Wisp ${{ github.ref_name }} is out"; color=15105570; fi
+          jq -n --arg role "$ROLE" --arg title "$title" --arg url "$url" --arg notes "$notes" --argjson color "$color" '{
+            username: "Wisp Releases",
+            avatar_url: "https://raw.githubusercontent.com/${{ github.repository }}/main/assets/icon256.png",
+            content: "<@&\($role)>",
+            allowed_mentions: {roles: [$role]},
+            embeds: [{title: $title, url: $url, color: $color, description: $notes,
+                      footer: {text: "Existing installs update themselves · Download from the link above"}}]
+          }' | curl -fsS -H "Content-Type: application/json" -d @- "$WEBHOOK"
