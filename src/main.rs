@@ -256,6 +256,9 @@ enum Ev {
     TabIpc(usize, String, String),
     Title(usize, String),
     Url(usize, String),
+    /// The page changed its own address without loading a new document (`history.pushState`, a
+    /// `#hash` link): single-page sites like roblox.com do this when you click around.
+    Source(usize, String),
     Loaded(usize),
     NewWindow(String),
     Wallpaper(usize, String, String),
@@ -728,6 +731,41 @@ fn stack_view(_v: &WebView, _top: bool) {}
 #[cfg(not(windows))]
 fn shape_chrome(_chrome: &WebView, _w: f64, _h: f64, _scale: f64, _cuts: &[R], _round: bool, _holes: &[(R, f64)]) {}
 
+/// Same-document navigations (`history.pushState`/`replaceState`, `#hash` links) never reach the
+/// navigation handler, so the address bar would keep showing the old URL. WebView2 reports them as
+/// a source change that isn't a new document.
+#[cfg(windows)]
+fn attach_source_changed(view: &WebView, proxy: EventLoopProxy<Ev>, tid: Arc<AtomicUsize>) {
+    use webview2_com::{take_pwstr, SourceChangedEventHandler};
+    use windows::{
+        core::PWSTR,
+        Win32::{Foundation::BOOL, System::WinRT::EventRegistrationToken},
+    };
+    use wry::WebViewExtWindows;
+    // SAFETY: COM calls on the webview owned by `view`, made on the UI thread that created it.
+    unsafe {
+        let Ok(wv) = view.controller().CoreWebView2() else { return };
+        let wv2 = wv.clone();
+        let mut token = EventRegistrationToken::default();
+        let _ = wv.add_SourceChanged(
+            &SourceChangedEventHandler::create(Box::new(move |_, args| {
+                let mut new_doc = BOOL(1);
+                if let Some(a) = args {
+                    a.IsNewDocument(&mut new_doc)?;
+                }
+                // New documents already went through the navigation handler.
+                if !new_doc.as_bool() {
+                    let mut uri = PWSTR::null();
+                    wv2.Source(&mut uri)?;
+                    let _ = proxy.send_event(Ev::Source(tid.load(Ordering::Relaxed), take_pwstr(uri)));
+                }
+                Ok(())
+            })),
+            &mut token,
+        );
+    }
+}
+
 /// HTML fullscreen (a video's fullscreen button, `requestFullscreen()`): WebView2 only fills its own
 /// view, so tell the app and let it take over the whole screen.
 #[cfg(windows)]
@@ -870,6 +908,20 @@ fn shape_chrome(chrome: &WebView, w: f64, h: f64, scale: f64, cuts: &[R], round:
             );
         }
         SetWindowRgn(hwnd, rgn, BOOL(1));
+    }
+}
+
+/// Keep a tab's own history list in step with where the page went: one step back or forward, the
+/// same place, or somewhere new (which drops anything ahead).
+fn track_history(hist: &mut Vec<String>, pos: &mut usize, u: &str) {
+    if *pos > 0 && hist.get(*pos - 1).map(String::as_str) == Some(u) {
+        *pos -= 1;
+    } else if hist.get(*pos + 1).map(String::as_str) == Some(u) {
+        *pos += 1;
+    } else if hist.get(*pos).map(String::as_str) != Some(u) {
+        hist.truncate(*pos + 1);
+        hist.push(u.to_string());
+        *pos = hist.len() - 1;
     }
 }
 
@@ -1333,6 +1385,7 @@ impl App {
                 {
                     blocker::attach(&view, tb.clone());
                     attach_fullscreen(&view, self.proxy.clone(), tidc.clone());
+                    attach_source_changed(&view, self.proxy.clone(), tidc.clone());
                 }
                 // The first page of a space brings its engine profile up to date with the
                 // installed extensions.
@@ -4310,20 +4363,24 @@ impl App {
                 }
                 self.push_state();
             }
+            Ev::Source(id, u) => {
+                // Same history bookkeeping as a real navigation, without the loading spinner.
+                if let Some((si, ti)) = self.find_tab(id) {
+                    let x = &mut self.spaces[si].tabs[ti];
+                    let u = shown(&u);
+                    if !u.starts_with("about:") && !u.starts_with("data:") && x.url != u {
+                        track_history(&mut x.hist, &mut x.pos, &u);
+                        x.url = u;
+                        self.push_state();
+                    }
+                }
+            }
             Ev::Url(id, u) => {
                 if let Some((si, ti)) = self.find_tab(id) {
                     let x = &mut self.spaces[si].tabs[ti];
                     let u = shown(&u);
                     if !u.starts_with("about:") && !u.starts_with("data:") {
-                        if x.pos > 0 && x.hist.get(x.pos - 1) == Some(&u) {
-                            x.pos -= 1;
-                        } else if x.hist.get(x.pos + 1) == Some(&u) {
-                            x.pos += 1;
-                        } else if x.hist.get(x.pos) != Some(&u) {
-                            x.hist.truncate(x.pos + 1);
-                            x.hist.push(u.clone());
-                            x.pos = x.hist.len() - 1;
-                        }
+                        track_history(&mut x.hist, &mut x.pos, &u);
                         x.url = u;
                     }
                     x.loading = true;
@@ -4784,6 +4841,23 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_follows_in_page_navigation() {
+        let (mut h, mut p) = (vec!["a/home".to_string()], 0);
+        track_history(&mut h, &mut p, "a/games");
+        track_history(&mut h, &mut p, "a/games#friends");
+        assert_eq!((h.len(), p), (3, 2));
+        track_history(&mut h, &mut p, "a/games"); // back
+        assert_eq!(p, 1);
+        track_history(&mut h, &mut p, "a/games#friends"); // forward
+        assert_eq!(p, 2);
+        track_history(&mut h, &mut p, "a/games#friends"); // same place: no new entry
+        assert_eq!((h.len(), p), (3, 2));
+        p = 0;
+        track_history(&mut h, &mut p, "a/profile"); // somewhere new drops what was ahead
+        assert_eq!(h, ["a/home", "a/profile"]);
+    }
 
     #[test]
     fn window_state_only_restores_on_screen() {

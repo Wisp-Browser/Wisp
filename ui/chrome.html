@@ -332,7 +332,11 @@ function applyChrome(){const glass=!!S.glass_on&&!!S.glass_ok,lay=SLOTS[S.layout
 const FONT_IDS=['inter','rounded','system','serif','mono'];
 function applyFont(f){const b=document.body.classList;FONT_IDS.forEach(k=>b.toggle('f-'+k,k===(f||'inter')))}
 // Bookmarks bar: click opens in this tab, middle- or Ctrl-click in a new tab.
-let bmSig='',urlTab=0,lastTabChange=0;const bmEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let bmSig='',urlTab=0,lastTabChange=0;const drafts=new Map();
+// Put the keyboard back in the address bar with the caret after the draft. Switching tabs focuses the
+// page a moment later, so try again briefly if that takes the focus away.
+function focusDraft(){const u=$('#url'),grab=()=>{send({t:'chrome_focus'});u.focus();const n=u.value.length;u.setSelectionRange(n,n)};
+ requestAnimationFrame(grab);[120,300,600].forEach(ms=>setTimeout(()=>{if(document.activeElement!==u||!document.hasFocus())grab()},ms))}const bmEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function renderBm(){const fs=S.bmf||[],on=!!S.bmbar&&((S.bms||[]).length>0||fs.length>0);document.body.classList.toggle('hasbm',on);
  const sig=on?JSON.stringify([S.bms,fs]):'';if(sig===bmSig)return;bmSig=sig;
  // Folders first, then the bookmarks that sit straight on the bar.
@@ -423,9 +427,15 @@ function render(){
   const add=document.createElement('button');add.className='sp';add.innerHTML=ico('plus');add.title='New space';add.onclick=()=>openSpace(null);sp.appendChild(add);
   if($('#spm').classList.contains('open'))spMenu(true)}
   syncTabs();
-  const a=S.tabs.find(t=>t.id===S.active);
-  // Keep what's being typed, unless the user switched to another tab (then show that tab's address).
-  if(a&&(document.activeElement!==$('#url')||a.id!==urlTab)){$('#url').value=a.url==='wisp://newtab'?'':a.url}
+  const a=S.tabs.find(t=>t.id===S.active),u=$('#url');
+  // Unfinished typing is kept per tab (like Chrome): switch away and back and it's still there. A
+  // draft is dropped once that tab goes somewhere else, and when the tab closes.
+  drafts.forEach((d,id)=>{if(!S.tabs.some(t=>t.id===id))drafts.delete(id)});
+  if(a){const addr=a.url==='wisp://newtab'?'':a.url,switched=a.id!==urlTab;let d=drafts.get(a.id);
+   if(d&&d.url!==a.url){drafts.delete(a.id);d=null}
+   if(switched||document.activeElement!==u)u.value=d?d.text:addr;
+   // Back on a New Tab you'd started typing in: carry on where you left off.
+   if(switched&&d&&!addr)focusDraft()}
   urlTab=a?a.id:0;
   omniIcon(a);
   $('#back').disabled=!a||!a.back;$('#fwd').disabled=!a||!a.fwd;
@@ -467,11 +477,13 @@ window.wisp={cuts:c=>{lastCuts=c;cuts(c)},state:s=>{S=Object.assign(S,s);render(
 $('#url').addEventListener('keydown',e=>{if(e.key==='Enter'){let v=e.target.value.trim();
   // Ctrl+Enter, like Chrome: "example" -> www.example.com
   if(e.ctrlKey&&v&&!/[\s.\/:]/.test(v))v='https://www.'+v+'.com';
-  send({t:'go',input:v});e.target.blur()}});
+  drafts.delete(urlTab);send({t:'go',input:v});e.target.blur()}});
+$('#url').addEventListener('input',e=>{const a=S.tabs&&S.tabs.find(t=>t.id===urlTab);if(!a)return;const addr=a.url==='wisp://newtab'?'':a.url;
+  if(e.target.value===addr)drafts.delete(a.id);else drafts.set(a.id,{text:e.target.value,url:a.url})});
 $('#url').addEventListener('focus',e=>e.target.select());
 // Esc, like Chrome: put back the page's address (dropping what was typed); again to leave the bar.
 $('#url').addEventListener('keydown',e=>{if(e.key!=='Escape')return;const a=S.tabs&&S.tabs.find(t=>t.id===S.active),addr=a&&a.url!=='wisp://newtab'?a.url:'';
-  if(e.target.value!==addr){e.target.value=addr;e.target.select();omniIcon(a)}else e.target.blur()});
+  drafts.delete(urlTab);if(e.target.value!==addr){e.target.value=addr;e.target.select();omniIcon(a)}else e.target.blur()});
 $('#new').onclick=$('#newh').onclick=()=>send({t:'new'});$('#back').onclick=()=>send({t:'back'});$('#fwd').onclick=()=>send({t:'fwd'});$('#rel').onclick=()=>send({t:'reload'});
 $('#aibtn').onclick=()=>AI.toggle();$('#unsplit').onclick=()=>send({t:'unsplit'});
 $('#sidetog').onclick=()=>send({t:'set',k:'side_collapsed',v:!S.collapsed});
