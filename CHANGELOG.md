@@ -6,6 +6,16 @@ All notable changes to Wisp are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-27
+
+### Fixed
+- The address bar now follows sites that change their address without loading a new page, such
+  as roblox.com going from /home to /games when you click around. Back and Forward follow along too.
+
+### Changed
+- What you type in the address bar is kept per tab. Start typing in a New Tab, switch to another
+  tab and back, and your text is still there with the cursor in the bar.
+
 ## [0.5.2] - 2026-11-22
 
 ### Changed
